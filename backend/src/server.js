@@ -10,19 +10,45 @@ import userRoutes from "./routes/user.routes.js";
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+/* ============================
+   CORS CONFIG PRODUCCIÓN
+   ============================ */
+const allowedOrigins = [
+  "http://localhost:5173",                 // desarrollo local
+  "https://salud-unificada.vercel.app",    // <--- TU FRONT EN PRODUCCIÓN
+];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Permitir requests sin origin (Postman, server-to-server)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      console.log("❌ Bloqueado por CORS:", origin);
+      return callback(new Error("CORS no permitido"));
+    },
+    credentials: true,
+  })
+);
+
 app.use(express.json());
 
-// rutas existentes
+/* ============================
+   RUTAS API
+   ============================ */
+
 app.use("/api/health", healthRoutes);
 app.use("/api/patient", patientRoutes);
-
-// NUEVO: login
 app.use("/api/auth", authRoutes);
-
-//Nuevo: gestionar usuarios
 app.use("/api/users", userRoutes);
 
+/* ============================
+   SERVIDOR
+   ============================ */
 app.listen(PORT, () => {
   console.log(`Backend Salud Unificada escuchando en http://localhost:${PORT}`);
 });
