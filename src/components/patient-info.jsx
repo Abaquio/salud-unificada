@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-export default function PatientInfo({ rut }) {
+export default function PatientInfo({ rut, isLoading = false }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
 
@@ -36,7 +36,52 @@ export default function PatientInfo({ rut }) {
     fetchData();
   }, [rut]);
 
-  // 🟦 Mensajes según estado
+  // 🦴 Skeleton reutilizable
+  const renderSkeleton = () => (
+    <Card className="p-6">
+      <div className="animate-pulse space-y-6 ">
+        {/* encabezado */}
+        <div className="flex items-start justify-between">
+          <div className="space-y-2">
+            <div className="h-6 w-52 bg-gray-200 rounded" />
+            <div className="h-4 w-32 bg-gray-100 rounded" />
+          </div>
+          <div className="h-6 w-24 bg-gray-200 rounded-full" />
+        </div>
+
+        {/* grid principal */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[1, 2, 3].map((col) => (
+            <div key={col} className="space-y-4">
+              {[1, 2, 3].map((row) => (
+                <div key={row}>
+                  <div className="h-3 w-28 bg-gray-100 rounded mb-2" />
+                  <div className="h-4 w-40 bg-gray-200 rounded" />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+
+        {/* pie */}
+        <div className="mt-4 pt-4 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i}>
+              <div className="h-3 w-32 bg-gray-100 rounded mb-2" />
+              <div className="h-4 w-40 bg-gray-200 rounded" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+
+  // 🟦 Prioridad: si está cargando (desde App), mostramos skeleton
+  if (isLoading) {
+    return renderSkeleton();
+  }
+
+  // 🟦 Si aún no hay rut (y tampoco estamos cargando) → mensaje original
   if (!rut) {
     return (
       <Card className="p-6">
@@ -55,7 +100,10 @@ export default function PatientInfo({ rut }) {
     );
   }
 
-  if (!data) return null;
+  // 🟦 Si hay rut pero aún no llegan los datos de la API → skeleton local
+  if (rut && !data) {
+    return renderSkeleton();
+  }
 
   // 🔍 Tomar datos desde Rayen (APS) o CORE (hospital)
   const pAps = data.paciente?.aps || null;
@@ -85,7 +133,6 @@ export default function PatientInfo({ rut }) {
       ? `${previsionBase} ${tramo}`
       : previsionBase;
 
-  // ⬅️ aquí ampliamos todos los posibles nombres para el médico de cabecera
   const medicoCabecera =
     pAps?.medico_cabecera ||
     pAps?.medico_cabecera_nombre ||
@@ -94,7 +141,6 @@ export default function PatientInfo({ rut }) {
     data.medico_cabecera_nombre ||
     "—";
 
-  // ⬅️ y aquí para el sector APS (desde la FK sector_aps_id ya lo estás resolviendo en el backend)
   const sectorAPS =
     pAps?.sector ||
     pAps?.sector_nombre ||

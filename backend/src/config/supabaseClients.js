@@ -5,6 +5,8 @@ const {
   SUPABASE_CORE_SERVICE_ROLE_KEY,
   SUPABASE_RAYEN_URL,
   SUPABASE_RAYEN_SERVICE_ROLE_KEY,
+  SUPABASE_AUDIT_URL,
+  SUPABASE_AUDIT_SERVICE_ROLE_KEY,
 } = process.env;
 
 // Cliente orientado a datos del hospital (CORE)
@@ -20,6 +22,15 @@ export const coreClient = createClient(
 export const rayenClient = createClient(
   SUPABASE_RAYEN_URL,
   SUPABASE_RAYEN_SERVICE_ROLE_KEY,
+  {
+    auth: { persistSession: false },
+  }
+);
+
+// 🔐 Cliente orientado a Auditoría (logins, búsquedas, roles, etc.)
+export const auditClient = createClient(
+  SUPABASE_AUDIT_URL,
+  SUPABASE_AUDIT_SERVICE_ROLE_KEY,
   {
     auth: { persistSession: false },
   }

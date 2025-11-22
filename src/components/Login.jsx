@@ -1,162 +1,216 @@
-import React from "react";
+import React, { useState } from "react";
 import styled from "styled-components";
+import Loader from "./Loader"; // ajusta la ruta si lo pusiste en otra carpeta
 
 const Login = ({ onEnter }) => {
-  const handleSubmit = (e) => {
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    onEnter(); // Cambia el estado en App.jsx
+    setIsLoading(true);
+
+    // aquí podrías hacer lógica real de login (fetch, etc.)
+    // Por ahora solo simulamos un pequeño delay para que se vea el loader
+    setTimeout(() => {
+      if (onEnter) onEnter();
+      // no hace falta setIsLoading(false) porque el componente se desmonta
+    }, 1200);
   };
 
   return (
-    <StyledWrapper>
-      <div className="login-container">
-        <form className="login-card" onSubmit={handleSubmit}>
-          <div className="login-title">
-            <span className="login-text">Login</span>
+    <>
+      {isLoading && <Loader />}
+
+      <StyledWrapper>
+        <div className="container">
+          <div className="login-box">
+            <h2>ACCESO</h2>
+
+            <form onSubmit={handleSubmit}>
+              <div className="input-box">
+                <input required type="text" placeholder=" " />
+                <label>Usuario</label>
+              </div>
+
+              <div className="input-box">
+                <input required type="password" placeholder=" " />
+                <label>Contraseña</label>
+              </div>
+
+              <button className="btn" type="submit" disabled={isLoading}>
+                {isLoading ? "Ingresando..." : "Entrar"}
+              </button>
+
+
+            </form>
           </div>
 
-          <div className="login-form">
-            <div className="input-group">
-              <input
-                required
-                placeholder="Usuario"
-                className="login-input"
-                type="text"
-              />
-            </div>
-
-            <div className="input-group">
-              <input
-                required
-                placeholder="Contraseña"
-                className="login-input"
-                type="password"
-              />
-            </div>
-
-            <button className="login-btn" type="submit">
-              Entrar
-            </button>
-          </div>
-        </form>
-      </div>
-    </StyledWrapper>
+          {Array.from({ length: 50 }).map((_, i) => (
+            <span key={i} style={{ "--i": i }} />
+          ))}
+        </div>
+      </StyledWrapper>
+    </>
   );
 };
 
-// ------------ ESTILOS ------------
 const StyledWrapper = styled.div`
-  .login-container {
-    position: relative;
-    perspective: 1000px;
-    width: 220px;
-    margin: 0 auto;
-    margin-top: 150px;
-  }
+  min-height: 100vh;
+  width: 100%;
+  background: radial-gradient(circle at top, #0f172a 0, #020617 50%, #000 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  padding: 20px;
 
-  .login-card {
+  .container {
     position: relative;
-    width: 100%;
-    height: 80px;
-    background: linear-gradient(135deg, #ff3366, #ff6b35);
-    border: 4px solid #000;
-    box-shadow: 8px 8px 0 #000, 16px 16px 0 rgba(255, 51, 102, 0.3);
-    cursor: pointer;
+    width: 400px;
+    height: 400px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-radius: 50%;
     overflow: hidden;
-    transition: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-    transform-style: preserve-3d;
+    background: #0b1120;
+    box-shadow: 0 0 40px rgba(15, 23, 42, 0.8);
   }
 
-  .login-card:hover {
-    height: 240px;
-    transform: translateZ(20px) rotateX(5deg) rotateY(-5deg);
-    box-shadow: 12px 12px 0 #000, 24px 24px 0 rgba(255, 51, 102, 0.4),
-      0 0 50px rgba(255, 51, 102, 0.6);
-  }
-
-  .login-title {
+  .container span {
     position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: inherit;
-    transition: all 0.4s ease;
+    left: 0;
+    width: 32px;
+    height: 6px;
+    background: #1f2937;
+    border-radius: 80px;
+    transform-origin: 200px;
+    transform: rotate(calc(var(--i) * (360deg / 50)));
+    animation: blink 2.8s linear infinite;
+    animation-delay: calc(var(--i) * (3s / 50));
   }
 
-  .login-text {
-    color: #000;
-    font-weight: 800;
-    font-size: 16px;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    text-shadow: 2px 2px 0 rgba(255, 255, 255, 0.3);
-    transition: all 0.4s ease;
+  @keyframes blink {
+    0% {
+      background: #0ef;
+    }
+    25% {
+      background: #1f2937;
+    }
   }
 
-  .login-card:hover .login-text {
-    opacity: 0;
-    transform: translateY(-30px) scale(0.8);
+  @media (max-width: 480px) {
+    .container {
+      width: 300px;
+      height: 300px;
+    }
+    .container span {
+      transform-origin: 150px;
+    }
   }
 
-  .login-form {
+  .login-box {
     position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 20px;
-    opacity: 0;
-    transform: translateY(30px) scale(0.8);
-    transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    width: 78%;
+    max-width: 260px;
+    z-index: 1;
+    padding: 24px 20px 20px;
+    border-radius: 18px;
+    background: rgba(15, 23, 42, 0.92);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    backdrop-filter: blur(6px);
   }
 
-  .login-card:hover .login-form {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+  h2 {
+    font-size: 1.6em;
+    color: #0ef;
+    text-align: center;
+    margin-bottom: 14px;
+    letter-spacing: 0.1em;
   }
 
-  .input-group {
+  .input-box {
+    position: relative;
+    margin: 18px 0;
+  }
+
+  input {
     width: 100%;
-    margin-bottom: 20px;
+    height: 45px;
+    background: transparent;
+    border: 2px solid #1f2937;
+    border-radius: 40px;
+    padding: 0 15px;
+    color: #e5e7eb;
+    font-size: 0.95em;
+    transition: 0.3s ease;
   }
 
-  .login-input {
+  input::placeholder {
+    color: transparent;
+  }
+
+  input:focus {
+    border-color: #0ef;
+    box-shadow: 0 0 10px rgba(34, 211, 238, 0.35);
+  }
+
+  input:focus ~ label,
+  input:not(:placeholder-shown) ~ label {
+    top: -10px;
+    font-size: 0.75em;
+    padding: 0 6px;
+    color: #0ef;
+    background: #0b1120;
+  }
+
+  label {
+    position: absolute;
+    top: 50%;
+    left: 15px;
+    transform: translateY(-50%);
+    color: #9ca3af;
+    font-size: 0.85em;
+    pointer-events: none;
+    transition: 0.3s ease;
+  }
+
+  .btn {
     width: 100%;
-    padding: 12px 10px;
-    background: rgba(255, 255, 255, 0.8);
-    border: 3px solid #000;
-    font-weight: 700;
-    color: #000;
-    box-shadow: 4px 4px 0 #000;
-    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-  }
-
-  .login-input:focus {
-    outline: none;
-    transform: translate(2px, 2px);
-    box-shadow: 2px 2px 0 #000;
-  }
-
-  .login-btn {
-    width: 100%;
-    padding: 12px;
-    background: #000;
-    color: #fff;
-    border: none;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    height: 45px;
+    background: #0ef;
+    border-radius: 40px;
     cursor: pointer;
-    box-shadow: 4px 4px 0 rgba(255, 255, 255, 0.3);
-    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    margin-top: 10px;
+    font-size: 0.95em;
+    color: #020617;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    transition: 0.3s ease;
+    border: none;
   }
 
-  .login-btn:hover {
-    transform: translate(2px, 2px);
-    box-shadow: 2px 2px 0 rgba(255, 255, 255, 0.3);
-    background: #333;
+  .btn:disabled {
+    opacity: 0.7;
+    cursor: default;
+  }
+
+  .btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.6);
+  }
+
+  .signup-link {
+    margin-top: 12px;
+    text-align: center;
+  }
+
+  .signup-link span {
+    font-size: 0.75em;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 `;
 

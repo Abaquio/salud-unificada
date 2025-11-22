@@ -80,7 +80,7 @@ export default function SearchBar({ onSearch }) {
             className="pl-10 h-12 text-base"
           />
         </div>
-        <Button type="submit" size="lg" className="px-8">
+        <Button type="submit" size="lg" className="px-8 btn-neon">
           Buscar
         </Button>
       </div>
@@ -92,3 +92,4 @@ export default function SearchBar({ onSearch }) {
     </form>
   );
 }
+

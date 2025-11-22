@@ -81,6 +81,24 @@ function App() {
             <p className="mt-2 text-sm text-red-500">{errorMessage}</p>
           )}
 
+          {/* EMPTY STATE: cuando aún no se busca ningún paciente */}
+          {!searchedRut && !errorMessage && (
+            <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
+              <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-primary/60 bg-primary/5 animate-pulse">
+                <span className="text-3xl">👤</span>
+                <span className="absolute -right-1 -bottom-1 text-xl">🔍</span>
+              </div>
+              <p className="text-lg font-semibold text-foreground">
+                Busca un paciente
+              </p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                Ingresa el RUT en la barra superior y presiona{" "}
+                <span className="font-semibold">“Buscar”</span> para ver el
+                resumen clínico unificado del paciente.
+              </p>
+            </div>
+          )}
+
           {searchedRut && (
             <div className="mt-6 flex gap-6">
               <div className="flex-1">
