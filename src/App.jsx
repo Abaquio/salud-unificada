@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // Login
 import Login from "./components/Login";
@@ -16,17 +16,60 @@ import HospitalAttentions from "./components/hospital-attentions";
 import Examinations from "./components/examinations";
 import Medications from "./components/medications";
 
-function App() {
-  // estado “login”
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+// Perfil de usuario
+import UserProfile from "./components/user-profile";
+// Gestión de usuarios
+import UserManagement from "./components/user-management";
 
-  // estados originales
+const API_URL = import.meta.env.VITE_API_URL;
+const STORAGE_KEY = "salud_unificada_user";
+
+function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const isLoggedIn = !!currentUser;
+
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileUser, setProfileUser] = useState(null);
+
+  const [showUserManagement, setShowUserManagement] = useState(false);
+
   const [searchedRut, setSearchedRut] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
+  const [errorMessage, setErrorMessage] = useState("");
 
-  const handleSearch = (rut) => {
-    setSearchedRut(rut);
-    setSelectedSection(null);
+  // recuperar usuario desde localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCurrentUser(parsed);
+      }
+    } catch (e) {
+      console.error("No se pudo leer usuario almacenado:", e);
+    }
+  }, []);
+
+  const handleSearch = async (rut) => {
+    try {
+      setErrorMessage("");
+      setSearchedRut(null);
+      setSelectedSection(null);
+
+      const res = await fetch(`${API_URL}/api/patient/${rut}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMessage(data.message || "Paciente no encontrado");
+        return;
+      }
+
+      setSearchedRut(data.rut);
+      setSelectedSection(null);
+    } catch (err) {
+      console.error("Error consultando backend:", err);
+      setErrorMessage("Error conectando con el servidor");
+    }
   };
 
   const handleSectionSelect = (section) => {
@@ -37,20 +80,94 @@ function App() {
     setSelectedSection(null);
   };
 
-  // Si NO está logueado → solo login
+  const handleLogout = () => {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.error("No se pudo limpiar usuario almacenado:", e);
+    }
+    setCurrentUser(null);
+    setShowProfile(false);
+    setProfileUser(null);
+    setShowUserManagement(false);
+    setSearchedRut(null);
+    setSelectedSection(null);
+    setErrorMessage("");
+  };
+
+  // Si NO está logueado → login
   if (!isLoggedIn) {
-    return <Login onEnter={() => setIsLoggedIn(true)} />;
+    return (
+      <Login
+        onEnter={(userFromApi) => {
+          setCurrentUser(userFromApi);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(userFromApi));
+          } catch (e) {
+            console.error("No se pudo guardar usuario:", e);
+          }
+        }}
+      />
+    );
   }
 
-  // Si ya entró → visor clínico
+  const currentUserDisplayName =
+    currentUser?.nombre ||
+    currentUser?.nombre_completo ||
+    currentUser?.name ||
+    "Administrador Salud Unificada";
+
+  const currentUserRole = currentUser?.rol || currentUser?.role;
+
+  const mapUserForProfile = (user) => ({
+    ...user,
+    name:
+      user.nombre ||
+      user.nombre_completo ||
+      user.name ||
+      "Usuario Salud Unificada",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <TopBar />
+      <TopBar
+        userName={currentUserDisplayName}
+        role={currentUserRole}
+        isAdmin={(currentUserRole || "").toLowerCase() === "administrador"}
+        onProfileClick={() => {
+          setProfileUser(mapUserForProfile(currentUser));
+          setShowProfile(true);
+        }}
+        onManageUsers={() => setShowUserManagement(true)}
+        onLogout={handleLogout}
+      />
 
-      {/* 👇 ESTE DIV ES LA CLAVE: deja espacio bajo el header fijo */}
       <div className="pt-20">
         <main className="mx-auto max-w-6xl px-4 pb-6">
           <SearchBar onSearch={handleSearch} />
+
+          {errorMessage && (
+            <p className="mt-2 text-sm text-red-500">{errorMessage}</p>
+          )}
+
+          {!searchedRut && !errorMessage && (
+            <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
+              <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-primary/60 bg-primary/5 animate-pulse">
+                <span className="text-3xl">👤</span>
+                <span className="absolute -right-1 -bottom-1 text-xl">
+                  🔍
+                </span>
+              </div>
+              <p className="text-lg font-semibold text-foreground">
+                Busca un paciente
+              </p>
+              <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                Ingresa el RUT en la barra superior y presiona{" "}
+                <span className="font-semibold">“Buscar”</span> para ver el
+                resumen clínico unificado del paciente.
+              </p>
+            </div>
+          )}
 
           {searchedRut && (
             <div className="mt-6 flex gap-6">
@@ -109,6 +226,25 @@ function App() {
           )}
         </main>
       </div>
+
+      {/* Overlay gestión de usuarios (solo admins) */}
+      {showUserManagement && (
+        <UserManagement
+          onClose={() => setShowUserManagement(false)}
+          onShowUserProfile={(user) => {
+            setProfileUser(mapUserForProfile(user));
+            setShowProfile(true);
+          }}
+        />
+      )}
+
+      {/* Overlay perfil (propio u otro usuario) */}
+      {showProfile && profileUser && (
+        <UserProfile
+          user={profileUser}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
     </div>
   );
 }
