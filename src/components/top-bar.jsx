@@ -1,9 +1,14 @@
 "use client";
 
+import { useState, useRef, useEffect } from "react";
+
 export default function TopBar({
   userName = "Administrador Salud Unificada",
+  role,              // nuevo (opcional)
+  isAdmin,           // nuevo (opcional)
   onProfileClick,
   onLogout,
+  onManageUsers,
 }) {
   const safeName = userName || "Usuario";
   const initials = safeName
@@ -12,26 +17,35 @@ export default function TopBar({
     .map((n) => n[0]?.toUpperCase())
     .join("");
 
-  const handleProfileClick = () => {
-    if (onProfileClick) onProfileClick();
-  };
+  // si viene isAdmin lo usamos directo, si no, deducimos por el nombre del rol
+  const isAdminUser =
+    typeof isAdmin === "boolean"
+      ? isAdmin
+      : ["ADMIN", "ADMINISTRADOR", "Administrador", "Admin"].includes(
+          (role || "").toUpperCase()
+        );
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  // Cerrar menú al hacer clic afuera
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const handleLogoutClick = () => {
-    // Si el padre pasa una función, usamos esa
-    if (onLogout) {
-      onLogout();
-      return;
-    }
+    if (onLogout) return onLogout();
 
-    // Fallback genérico: limpiar token y mandar a /login
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.removeItem("authToken");
-      } catch (e) {
-        console.error("No se pudo limpiar el token:", e);
-      }
-      window.location.href = "/login";
-    }
+    try {
+      localStorage.removeItem("authToken");
+    } catch (e) {}
+    window.location.href = "/login";
   };
 
   return (
@@ -65,9 +79,9 @@ export default function TopBar({
           </div>
         </div>
 
-        {/* USUARIO + AVATAR + LOGOUT */}
-        <div className="flex items-center gap-3">
-          {/* Nombre de usuario */}
+        {/* USUARIO + MENÚ */}
+        <div className="flex items-center gap-3" ref={menuRef}>
+          {/* Nombre */}
           <div className="hidden sm:flex flex-col items-end mr-1">
             <span className="text-xs text-gray-500">Usuario</span>
             <span className="text-sm font-semibold text-gray-900">
@@ -75,38 +89,65 @@ export default function TopBar({
             </span>
           </div>
 
-          {/* Avatar: abre el perfil */}
+          {/* Avatar */}
           <button
             type="button"
-            onClick={handleProfileClick}
+            onClick={onProfileClick}
             className="w-10 h-10 rounded-full bg-primary flex items-center justify-center border border-primary/80 shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/50"
             aria-label="Ver perfil de usuario"
           >
             <span className="text-sm font-bold text-white">{initials}</span>
           </button>
 
-          {/* Ícono cerrar sesión: siempre el último, bien a la derecha */}
+          {/* Botón de 3 puntos */}
           <button
             type="button"
-            onClick={handleLogoutClick}
-            className="w-9 h-9 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition focus:outline-none focus:ring-2 focus:ring-primary/40"
-            aria-label="Cerrar sesión"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition"
+            aria-label="Opciones"
           >
-            {/* Ícono típico de logout */}
             <svg
               className="w-4 h-4 text-gray-700"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
+              fill="currentColor"
+              viewBox="0 0 20 20"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M15 12H3m4-4l-4 4m4 4l-4-4m9-7h4a2 2 0 012 2v10a2 2 0 01-2 2h-4"
-              />
+              <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm1.5 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
             </svg>
           </button>
+
+          {/* MENÚ DESPLEGABLE */}
+          {menuOpen && (
+            <div className="absolute top-16 right-6 w-48 bg-white border border-gray-200 rounded-lg shadow-lg text-sm py-2 animate-in fade-in zoom-in">
+              <button
+                className="w-full px-4 py-2 text-left hover:bg-gray-100"
+                onClick={() => {
+                  setMenuOpen(false);
+                  onProfileClick?.();
+                }}
+              >
+                Ver perfil
+              </button>
+
+              {isAdminUser && (
+                <button
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onManageUsers?.();
+                  }}
+                >
+                  Gestionar usuarios
+                </button>
+              )}
+
+              <button
+                className="w-full px-4 py-2 text-left text-red-600 hover:bg-red-50"
+                onClick={handleLogoutClick}
+              >
+                Salir
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

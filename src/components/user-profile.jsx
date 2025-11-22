@@ -7,7 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
 export default function UserProfile({ user = {}, onClose }) {
-  const safeName = user.name || "Usuario Salud Unificada";
+  // Nombre seguro, usando lo que venga del backend
+  const safeName =
+    user.name ||
+    user.nombre ||
+    user.nombre_completo ||
+    "Usuario Salud Unificada";
 
   const initials = safeName
     .split(" ")
@@ -15,10 +20,25 @@ export default function UserProfile({ user = {}, onClose }) {
     .map((n) => n[0]?.toUpperCase())
     .join("");
 
+  // Datos reales que vienen del login
+  const email = user.email || user.correo || "";
+  const phone = user.phone || user.telefono || "";
+  const rol =
+    user.role || user.rol || user.rol_nombre || user.rolNombre || "Usuario";
+  const isActive =
+    typeof user.isActive === "boolean"
+      ? user.isActive
+      : typeof user.es_activo === "boolean"
+      ? user.es_activo
+      : true;
+
+  const createdAt = user.createdAt || user.created_at || "—";
+  const updatedAt = user.updatedAt || user.updated_at || "—";
+
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
-    email: user?.email ?? "",
-    phone: user?.phone ?? "",
+    email,
+    phone,
     password: "",
   });
 
@@ -27,7 +47,7 @@ export default function UserProfile({ user = {}, onClose }) {
   };
 
   const handleSave = () => {
-    // Aquí iría la lógica para guardar los cambios (llamar API, etc.)
+    // Aquí en el futuro llamarías a tu endpoint de actualización de usuario
     console.log("[Visor Salud Unificada] Guardando cambios:", formData);
     setIsEditing(false);
   };
@@ -72,7 +92,7 @@ export default function UserProfile({ user = {}, onClose }) {
           </Button>
         </div>
 
-        {/* Content */}
+        {/* Contenido */}
         <div className="max-w-4xl mx-auto px-6 py-8">
           <div className="space-y-6">
             {/* Información del Usuario */}
@@ -87,8 +107,14 @@ export default function UserProfile({ user = {}, onClose }) {
                   <div>
                     <h2 className="text-2xl font-semibold">{safeName}</h2>
                     <p className="text-muted-foreground">
-                      {user.role || "Usuario"}
+                      {rol}
+                      {user.rut ? ` · ${user.rut}` : ""}
                     </p>
+                    {email && (
+                      <p className="text-sm text-muted-foreground mt-1">
+                        {email}
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -104,17 +130,15 @@ export default function UserProfile({ user = {}, onClose }) {
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Estado</p>
                     <Badge
-                      variant={user.isActive ? "default" : "secondary"}
+                      variant={isActive ? "default" : "secondary"}
                       className="text-base px-3 py-1"
                     >
-                      {user.isActive ? "Activo" : "Inactivo"}
+                      {isActive ? "Activo" : "Inactivo"}
                     </Badge>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">Rol</p>
-                    <p className="text-lg font-medium">
-                      {user.role || "Médico"}
-                    </p>
+                    <p className="text-lg font-medium">{rol}</p>
                   </div>
                 </div>
               </CardContent>
@@ -131,17 +155,13 @@ export default function UserProfile({ user = {}, onClose }) {
                     <p className="text-sm text-muted-foreground">
                       Fecha de Creación
                     </p>
-                    <p className="text-lg font-medium">
-                      {user.createdAt || "01/01/2023"}
-                    </p>
+                    <p className="text-lg font-medium">{createdAt}</p>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm text-muted-foreground">
                       Última Actualización
                     </p>
-                    <p className="text-lg font-medium">
-                      {user.updatedAt || "15/03/2024"}
-                    </p>
+                    <p className="text-lg font-medium">{updatedAt}</p>
                   </div>
                 </div>
               </CardContent>
@@ -215,8 +235,8 @@ export default function UserProfile({ user = {}, onClose }) {
                       onClick={() => {
                         setIsEditing(false);
                         setFormData({
-                          email: user?.email ?? "",
-                          phone: user?.phone ?? "",
+                          email,
+                          phone,
                           password: "",
                         });
                       }}

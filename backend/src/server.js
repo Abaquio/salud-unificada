@@ -5,6 +5,7 @@ import cors from "cors";
 import healthRoutes from "./routes/health.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
 import authRoutes from "./routes/auth.routes.js";
+import userRoutes from "./routes/user.routes.js";
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -18,6 +19,9 @@ app.use("/api/patient", patientRoutes);
 
 // NUEVO: login
 app.use("/api/auth", authRoutes);
+
+//Nuevo: gestionar usuarios
+app.use("/api/users", userRoutes);
 
 app.listen(PORT, () => {
   console.log(`Backend Salud Unificada escuchando en http://localhost:${PORT}`);

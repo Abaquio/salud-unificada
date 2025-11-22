@@ -58,14 +58,18 @@ export async function login(req, res) {
         correo,
         rut,
         dv,
+        telefono,
+        direccion,
         password_hash,
         es_activo,
+        created_at,
+        updated_at,
         rol:rol_id (
           id,
           nombre
         )
         `
-      )
+      ) // :contentReference[oaicite:0]{index=0}
       .eq("es_activo", true);
 
     if (isRutLike) {
@@ -129,15 +133,40 @@ export async function login(req, res) {
       detalle: null,
     });
 
-    // Devolvemos datos limpios al frontend
+    // Devolvemos datos limpios al frontend, con alias en camelCase y snake_case
     return res.json({
       ok: true,
       user: {
         id: user.id_usuario,
         nombre: user.nombre_completo,
+        nombre_completo: user.nombre_completo,
+
+        // correo / email
         correo: user.correo,
+        email: user.correo,
+
         rut: `${user.rut}-${user.dv}`,
+
+        // rol
         rol: user.rol?.nombre || null,
+        role: user.rol?.nombre || null,
+        rol_id: user.rol?.id ?? null,
+
+        // contacto
+        telefono: user.telefono || null,
+        phone: user.telefono || null,
+        direccion: user.direccion || null,
+        address: user.direccion || null,
+
+        // estado
+        es_activo: user.es_activo,
+        isActive: user.es_activo,
+
+        // fechas
+        created_at: user.created_at,
+        createdAt: user.created_at,
+        updated_at: user.updated_at,
+        updatedAt: user.updated_at,
       },
     });
   } catch (err) {

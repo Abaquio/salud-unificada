@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 // Login
 import Login from "./components/Login";
@@ -18,27 +18,40 @@ import Medications from "./components/medications";
 
 // Perfil de usuario
 import UserProfile from "./components/user-profile";
+// Gestión de usuarios
+import UserManagement from "./components/user-management";
 
 const API_URL = import.meta.env.VITE_API_URL;
+const STORAGE_KEY = "salud_unificada_user";
 
 function App() {
-  // usuario autenticado
   const [currentUser, setCurrentUser] = useState(null);
   const isLoggedIn = !!currentUser;
 
-  // estado para el panel de perfil
   const [showProfile, setShowProfile] = useState(false);
+  const [profileUser, setProfileUser] = useState(null);
 
-  // estados originales
+  const [showUserManagement, setShowUserManagement] = useState(false);
+
   const [searchedRut, setSearchedRut] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
-
-  // estado para manejar errores de búsqueda (rut no existe, error backend, etc.)
   const [errorMessage, setErrorMessage] = useState("");
+
+  // recuperar usuario desde localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setCurrentUser(parsed);
+      }
+    } catch (e) {
+      console.error("No se pudo leer usuario almacenado:", e);
+    }
+  }, []);
 
   const handleSearch = async (rut) => {
     try {
-      // limpiar antes de nueva búsqueda
       setErrorMessage("");
       setSearchedRut(null);
       setSelectedSection(null);
@@ -47,12 +60,10 @@ function App() {
       const data = await res.json();
 
       if (!res.ok) {
-        // si backend responde 404 u otro error
         setErrorMessage(data.message || "Paciente no encontrado");
         return;
       }
 
-      // si todo ok, guardamos el rut normalizado que devuelve el backend
       setSearchedRut(data.rut);
       setSelectedSection(null);
     } catch (err) {
@@ -69,44 +80,68 @@ function App() {
     setSelectedSection(null);
   };
 
-  // logout simple: volvemos al login
   const handleLogout = () => {
-    // si usas tokens en localStorage, los puedes limpiar aquí también
-    // localStorage.removeItem("authToken");
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      console.error("No se pudo limpiar usuario almacenado:", e);
+    }
     setCurrentUser(null);
     setShowProfile(false);
+    setProfileUser(null);
+    setShowUserManagement(false);
+    setSearchedRut(null);
+    setSelectedSection(null);
+    setErrorMessage("");
   };
 
-  // preparamos el usuario para el perfil (mapeando nombre → name)
-  const profileUser =
-    currentUser != null
-      ? {
-          ...currentUser,
-          name: currentUser.nombre || currentUser.name || "Usuario Salud Unificada",
-        }
-      : null;
-
-  // Si NO está logueado → solo login
+  // Si NO está logueado → login
   if (!isLoggedIn) {
     return (
       <Login
         onEnter={(userFromApi) => {
           setCurrentUser(userFromApi);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(userFromApi));
+          } catch (e) {
+            console.error("No se pudo guardar usuario:", e);
+          }
         }}
       />
     );
   }
 
-  // Si ya entró → visor clínico
+  const currentUserDisplayName =
+    currentUser?.nombre ||
+    currentUser?.nombre_completo ||
+    currentUser?.name ||
+    "Administrador Salud Unificada";
+
+  const currentUserRole = currentUser?.rol || currentUser?.role;
+
+  const mapUserForProfile = (user) => ({
+    ...user,
+    name:
+      user.nombre ||
+      user.nombre_completo ||
+      user.name ||
+      "Usuario Salud Unificada",
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <TopBar
-        userName={currentUser?.nombre || "Administrador Salud Unificada"}
-        onProfileClick={() => setShowProfile(true)}
+        userName={currentUserDisplayName}
+        role={currentUserRole}
+        isAdmin={(currentUserRole || "").toLowerCase() === "administrador"}
+        onProfileClick={() => {
+          setProfileUser(mapUserForProfile(currentUser));
+          setShowProfile(true);
+        }}
+        onManageUsers={() => setShowUserManagement(true)}
         onLogout={handleLogout}
       />
 
-      {/* wrapper con padding top para no quedar bajo el header fijo */}
       <div className="pt-20">
         <main className="mx-auto max-w-6xl px-4 pb-6">
           <SearchBar onSearch={handleSearch} />
@@ -115,12 +150,13 @@ function App() {
             <p className="mt-2 text-sm text-red-500">{errorMessage}</p>
           )}
 
-          {/* EMPTY STATE: cuando aún no se busca ningún paciente */}
           {!searchedRut && !errorMessage && (
             <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
               <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-primary/60 bg-primary/5 animate-pulse">
                 <span className="text-3xl">👤</span>
-                <span className="absolute -right-1 -bottom-1 text-xl">🔍</span>
+                <span className="absolute -right-1 -bottom-1 text-xl">
+                  🔍
+                </span>
               </div>
               <p className="text-lg font-semibold text-foreground">
                 Busca un paciente
@@ -136,7 +172,6 @@ function App() {
           {searchedRut && (
             <div className="mt-6 flex gap-6">
               <div className="flex-1">
-                {/* vista general del paciente */}
                 {!selectedSection && (
                   <PatientInfo
                     rut={searchedRut}
@@ -144,9 +179,11 @@ function App() {
                   />
                 )}
 
-                {/* secciones detalle */}
                 {selectedSection === "aps-attentions" && (
-                  <ApsAttentions rut={searchedRut} onBack={handleBackToPatient} />
+                  <ApsAttentions
+                    rut={searchedRut}
+                    onBack={handleBackToPatient}
+                  />
                 )}
 
                 {selectedSection === "sigte-derivations" && (
@@ -164,15 +201,20 @@ function App() {
                 )}
 
                 {selectedSection === "examinations" && (
-                  <Examinations rut={searchedRut} onBack={handleBackToPatient} />
+                  <Examinations
+                    rut={searchedRut}
+                    onBack={handleBackToPatient}
+                  />
                 )}
 
                 {selectedSection === "medications" && (
-                  <Medications rut={searchedRut} onBack={handleBackToPatient} />
+                  <Medications
+                    rut={searchedRut}
+                    onBack={handleBackToPatient}
+                  />
                 )}
               </div>
 
-              {/* sidebar de secciones */}
               <div className="w-80">
                 <SectionsSidebar
                   rut={searchedRut}
@@ -185,7 +227,18 @@ function App() {
         </main>
       </div>
 
-      {/* Overlay de perfil de usuario */}
+      {/* Overlay gestión de usuarios (solo admins) */}
+      {showUserManagement && (
+        <UserManagement
+          onClose={() => setShowUserManagement(false)}
+          onShowUserProfile={(user) => {
+            setProfileUser(mapUserForProfile(user));
+            setShowProfile(true);
+          }}
+        />
+      )}
+
+      {/* Overlay perfil (propio u otro usuario) */}
       {showProfile && profileUser && (
         <UserProfile
           user={profileUser}
