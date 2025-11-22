@@ -1,5 +1,5 @@
 // backend/src/controllers/auth.controller.js
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { auditClient } from "../config/supabaseClients.js";
 
 const LOGIN_TABLE = "login_auditoria";
