@@ -1,20 +1,137 @@
 import React, { useState } from "react";
 import styled from "styled-components";
-import Loader from "./Loader"; // ajusta la ruta si lo pusiste en otra carpeta
+import Loader from "./Loader"; // ajusta la ruta si lo tienes en otra carpeta
+
+const API_URL = import.meta.env.VITE_API_URL;
+
+// Iconos simples tipo "ojo" (no emojis)
+const EyeIcon = (props) => (
+  <svg
+    viewBox="0 0 24 24"
+    width="18"
+    height="18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+const EyeOffIcon = (props) => (
+  <svg
+    viewBox="0 0 24 24"
+    width="18"
+    height="18"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M17.94 17.94A10.94 10.94 0 0 1 12 19c-7 0-11-7-11-7a21.77 21.77 0 0 1 5.06-5.94" />
+    <path d="M9.88 9.88A3 3 0 0 0 12 15a3 3 0 0 0 2.12-.88" />
+    <path d="M1 1l22 22" />
+  </svg>
+);
 
 const Login = ({ onEnter }) => {
+  const [rut, setRut] = useState("");
+  const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Auto-formato RUT: 11222333-4
+  const handleRutChange = (e) => {
+    let value = e.target.value;
+
+    // Eliminar puntos, espacios, guiones y todo lo que no sea dígito o K
+    value = value.replace(/[^0-9kK]/g, "");
+
+    // Máximo 9 caracteres: 8 dígitos + DV
+    if (value.length > 9) {
+      value = value.slice(0, 9);
+    }
+
+    if (value.length === 0) {
+      setRut("");
+      return;
+    }
+
+    if (value.length === 1) {
+      // Aún no ponemos guion, solo el primer dígito
+      setRut(value);
+      return;
+    }
+
+    const body = value.slice(0, value.length - 1);
+    const dv = value.slice(-1).toUpperCase();
+
+    const formatted = `${body}-${dv}`;
+    setRut(formatted);
+  };
+
+  const isValidRutFormat = (value) => {
+    // 7 u 8 dígitos + guion + dígito o K
+    const rutRegex = /^\d{7,8}-[\dK]$/;
+    return rutRegex.test(value);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setIsLoading(true);
 
-    // aquí podrías hacer lógica real de login (fetch, etc.)
-    // Por ahora solo simulamos un pequeño delay para que se vea el loader
-    setTimeout(() => {
-      if (onEnter) onEnter();
-      // no hace falta setIsLoading(false) porque el componente se desmonta
-    }, 1200);
+    const trimmedRut = rut.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedRut || !trimmedPassword) {
+      setErrorMessage("Usuario y contraseña son obligatorios");
+      return;
+    }
+
+    if (!isValidRutFormat(trimmedRut)) {
+      setErrorMessage(
+        "Ingresa un RUT válido en formato 11222333-4 (sin puntos)"
+      );
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMessage("");
+
+    try {
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          rutOrEmail: trimmedRut, // el backend acepta RUT o correo aquí
+          password: trimmedPassword,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.ok) {
+        setErrorMessage(data.message || "Usuario o contraseña incorrectos");
+        setIsLoading(false);
+        return;
+      }
+
+      if (onEnter) {
+        onEnter(data.user);
+      }
+    } catch (err) {
+      console.error("Error en login:", err);
+      setErrorMessage("Error conectando con el servidor");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -28,20 +145,44 @@ const Login = ({ onEnter }) => {
 
             <form onSubmit={handleSubmit}>
               <div className="input-box">
-                <input required type="text" placeholder=" " />
-                <label>Usuario</label>
+                <input
+                  required
+                  type="text"
+                  placeholder=" "
+                  value={rut}
+                  onChange={handleRutChange}
+                  autoComplete="username"
+                />
+                <label>RUT (sin puntos, con guion)</label>
               </div>
 
-              <div className="input-box">
-                <input required type="password" placeholder=" " />
+              <div className="input-box password-box">
+                <input
+                  required
+                  type={showPassword ? "text" : "password"}
+                  placeholder=" "
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                />
                 <label>Contraseña</label>
+                <button
+                  type="button"
+                  className="toggle-password"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  aria-label={
+                    showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                  }
+                >
+                  {showPassword ? <EyeOffIcon /> : <EyeIcon />}
+                </button>
               </div>
 
               <button className="btn" type="submit" disabled={isLoading}>
                 {isLoading ? "Ingresando..." : "Entrar"}
               </button>
 
-
+              {errorMessage && <p className="error-text">{errorMessage}</p>}
             </form>
           </div>
 
@@ -175,6 +316,29 @@ const StyledWrapper = styled.div`
     transition: 0.3s ease;
   }
 
+  .password-box input {
+    padding-right: 42px; /* espacio para el ojito */
+  }
+
+  .toggle-password {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #9ca3af;
+  }
+
+  .toggle-password:hover {
+    color: #e5e7eb;
+  }
+
   .btn {
     width: 100%;
     height: 45px;
@@ -199,6 +363,13 @@ const StyledWrapper = styled.div`
   .btn:hover:not(:disabled) {
     transform: translateY(-1px);
     box-shadow: 0 0 20px rgba(34, 211, 238, 0.6);
+  }
+
+  .error-text {
+    margin-top: 10px;
+    font-size: 0.8rem;
+    color: #f97373;
+    text-align: center;
   }
 
   .signup-link {

@@ -16,11 +16,18 @@ import HospitalAttentions from "./components/hospital-attentions";
 import Examinations from "./components/examinations";
 import Medications from "./components/medications";
 
+// Perfil de usuario
+import UserProfile from "./components/user-profile";
+
 const API_URL = import.meta.env.VITE_API_URL;
 
 function App() {
-  // estado “login”
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  // usuario autenticado
+  const [currentUser, setCurrentUser] = useState(null);
+  const isLoggedIn = !!currentUser;
+
+  // estado para el panel de perfil
+  const [showProfile, setShowProfile] = useState(false);
 
   // estados originales
   const [searchedRut, setSearchedRut] = useState(null);
@@ -62,15 +69,42 @@ function App() {
     setSelectedSection(null);
   };
 
+  // logout simple: volvemos al login
+  const handleLogout = () => {
+    // si usas tokens en localStorage, los puedes limpiar aquí también
+    // localStorage.removeItem("authToken");
+    setCurrentUser(null);
+    setShowProfile(false);
+  };
+
+  // preparamos el usuario para el perfil (mapeando nombre → name)
+  const profileUser =
+    currentUser != null
+      ? {
+          ...currentUser,
+          name: currentUser.nombre || currentUser.name || "Usuario Salud Unificada",
+        }
+      : null;
+
   // Si NO está logueado → solo login
   if (!isLoggedIn) {
-    return <Login onEnter={() => setIsLoggedIn(true)} />;
+    return (
+      <Login
+        onEnter={(userFromApi) => {
+          setCurrentUser(userFromApi);
+        }}
+      />
+    );
   }
 
   // Si ya entró → visor clínico
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <TopBar />
+      <TopBar
+        userName={currentUser?.nombre || "Administrador Salud Unificada"}
+        onProfileClick={() => setShowProfile(true)}
+        onLogout={handleLogout}
+      />
 
       {/* wrapper con padding top para no quedar bajo el header fijo */}
       <div className="pt-20">
@@ -112,10 +146,7 @@ function App() {
 
                 {/* secciones detalle */}
                 {selectedSection === "aps-attentions" && (
-                  <ApsAttentions
-                    rut={searchedRut}
-                    onBack={handleBackToPatient}
-                  />
+                  <ApsAttentions rut={searchedRut} onBack={handleBackToPatient} />
                 )}
 
                 {selectedSection === "sigte-derivations" && (
@@ -133,17 +164,11 @@ function App() {
                 )}
 
                 {selectedSection === "examinations" && (
-                  <Examinations
-                    rut={searchedRut}
-                    onBack={handleBackToPatient}
-                  />
+                  <Examinations rut={searchedRut} onBack={handleBackToPatient} />
                 )}
 
                 {selectedSection === "medications" && (
-                  <Medications
-                    rut={searchedRut}
-                    onBack={handleBackToPatient}
-                  />
+                  <Medications rut={searchedRut} onBack={handleBackToPatient} />
                 )}
               </div>
 
@@ -159,6 +184,14 @@ function App() {
           )}
         </main>
       </div>
+
+      {/* Overlay de perfil de usuario */}
+      {showProfile && profileUser && (
+        <UserProfile
+          user={profileUser}
+          onClose={() => setShowProfile(false)}
+        />
+      )}
     </div>
   );
 }
