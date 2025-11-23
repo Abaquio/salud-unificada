@@ -6,6 +6,9 @@ import healthRoutes from "./routes/health.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
+import profileRoutes from "./routes/profile.routes.js";
+
+
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -45,6 +48,7 @@ app.use("/api/health", healthRoutes);
 app.use("/api/patient", patientRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/profile", profileRoutes);
 
 /* ============================
    SERVIDOR
