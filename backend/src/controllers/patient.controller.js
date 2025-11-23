@@ -188,7 +188,10 @@ export async function getPatientByRut(req, res) {
               `
               *,
               profesional_aps (
-                nombre_completo
+                nombre_completo,
+                tipo_profesional_aps (
+                  nombre
+                )
               ),
               establecimiento_aps (
                 nombre
@@ -196,7 +199,8 @@ export async function getPatientByRut(req, res) {
             `
             )
             .eq("paciente_id", pacienteApsId)
-            .order("fecha_atencion", { ascending: false })
+            .order("fecha_atencion", { ascending: false }),
+          []
         )
       );
 
@@ -207,7 +211,8 @@ export async function getPatientByRut(req, res) {
             .from("derivacion_aps")
             .select("*")
             .eq("paciente_id", pacienteApsId)
-            .order("fecha_derivacion", { ascending: false })
+            .order("fecha_derivacion", { ascending: false }),
+          []
         )
       );
     } else {
@@ -231,7 +236,8 @@ export async function getPatientByRut(req, res) {
             `
             )
             .eq("paciente_id", pacienteCoreId)
-            .order("fecha_ingreso", { ascending: false })
+            .order("fecha_ingreso", { ascending: false }),
+          []
         )
       );
 
@@ -252,7 +258,8 @@ export async function getPatientByRut(req, res) {
             `
             )
             .eq("paciente_id", pacienteCoreId)
-            .order("fecha_hora", { ascending: false })
+            .order("fecha_hora", { ascending: false }),
+          []
         )
       );
 
@@ -270,7 +277,8 @@ export async function getPatientByRut(req, res) {
             `
             )
             .eq("paciente_id", pacienteCoreId)
-            .order("fecha_ingreso", { ascending: false })
+            .order("fecha_ingreso", { ascending: false }),
+          []
         )
       );
 
@@ -288,7 +296,8 @@ export async function getPatientByRut(req, res) {
             `
             )
             .eq("paciente_id", pacienteCoreId)
-            .order("fecha_solicitud", { ascending: false })
+            .order("fecha_solicitud", { ascending: false }),
+          []
         )
       );
 
@@ -306,7 +315,8 @@ export async function getPatientByRut(req, res) {
             `
             )
             .eq("paciente_id", pacienteCoreId)
-            .order("fecha_toma", { ascending: false })
+            .order("fecha_toma", { ascending: false }),
+          []
         )
       );
 
@@ -317,7 +327,8 @@ export async function getPatientByRut(req, res) {
             .from("medicamento_hosp")
             .select("*")
             .eq("paciente_id", pacienteCoreId)
-            .order("fecha_inicio", { ascending: false })
+            .order("fecha_inicio", { ascending: false }),
+          []
         )
       );
     } else {
@@ -348,6 +359,11 @@ export async function getPatientByRut(req, res) {
         a.profesional_nombre ?? a.profesional_aps?.nombre_completo ?? null,
       establecimiento_nombre:
         a.establecimiento_nombre ?? a.establecimiento_aps?.nombre ?? null,
+      // 👇 nuevo: tipo de profesional para filtros del front
+      profesional_tipo:
+        a.profesional_tipo ??
+        a.profesional_aps?.tipo_profesional_aps?.nombre ??
+        null,
     }));
 
     const urgenciasHosp = (urgenciasHospRaw || []).map((u) => ({
