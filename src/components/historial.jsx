@@ -1,31 +1,109 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
-export default function PatientHistory({ onClose }) {
+const API_URL = import.meta.env.VITE_API_URL
+
+export default function PatientHistory({ onClose, currentUserId }) {
   const [searchTerm, setSearchTerm] = useState("")
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
 
-  // Datos de ejemplo del historial de búsquedas
-  const historyData = [
-    { id: 1, rut: "12.345.678-9", nombre: "María Isabel González Fernández", ciudad: "Santiago" },
-    { id: 2, rut: "98.765.432-1", nombre: "Carlos Alberto Muñoz Pérez", ciudad: "Valparaíso" },
-    { id: 3, rut: "15.678.234-5", nombre: "Ana Patricia Rojas Silva", ciudad: "Concepción" },
-    { id: 4, rut: "20.123.456-7", nombre: "José Miguel Hernández Castro", ciudad: "La Serena" },
-    { id: 5, rut: "18.765.432-0", nombre: "Claudia Andrea Espinoza Torres", ciudad: "Temuco" },
-    { id: 6, rut: "22.456.789-3", nombre: "Roberto Carlos Díaz Morales", ciudad: "Antofagasta" },
-    { id: 7, rut: "11.234.567-8", nombre: "Patricia Elena Ramírez Vega", ciudad: "Rancagua" },
-    { id: 8, rut: "19.876.543-2", nombre: "Luis Fernando Soto Contreras", ciudad: "Puerto Montt" },
-  ]
+  const PAGE_SIZE = 6
 
-  const filteredHistory = historyData.filter(
-    (item) =>
-      item.rut.includes(searchTerm) ||
-      item.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.ciudad.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+  // 🔡 Normaliza RUT para comparar (solo números y K, sin guion)
+  const normalizeRut = (rut) => (rut || "").replace(/[^0-9Kk]/g, "").toUpperCase()
+
+  // 🧮 Formatea input como 11222333-4
+  const formatRutInput = (value) => {
+    let clean = value.replace(/[^0-9]/g, "")
+
+    // Máximo 9 dígitos (8 cuerpo + 1 dv)
+    if (clean.length > 9) clean = clean.slice(0, 9)
+
+    if (clean.length <= 8) return clean
+
+    return `${clean.slice(0, 8)}-${clean.slice(8)}`
+  }
+
+  const handleSearchChange = (e) => {
+    const formatted = formatRutInput(e.target.value)
+    setSearchTerm(formatted)
+    setCurrentPage(1) // resetear a la primera página al buscar
+  }
+
+  // 🛰️ Cargar historial real del usuario logeado
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!currentUserId) return
+
+      try {
+        setLoading(true)
+        setError("")
+
+        const params = new URLSearchParams()
+        params.set("usuarioId", currentUserId)
+
+        const res = await fetch(
+          `${API_URL}/api/auditoria/busquedas?${params.toString()}`
+        )
+
+        const data = await res.json()
+
+        if (!res.ok) {
+          throw new Error(data.message || "Error al cargar historial")
+        }
+
+        setHistory(Array.isArray(data) ? data : [])
+      } catch (err) {
+        console.error(err)
+        setError(err.message || "Error al cargar historial")
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchHistory()
+  }, [currentUserId])
+
+  // 🧾 Filtrado en el frontend por RUT
+  const filteredHistory = history.filter((item) => {
+    if (!searchTerm) return true
+
+    const itemRutNorm = normalizeRut(`${item.rut_buscado || ""}${item.dv_buscado || ""}`)
+    const searchNorm = normalizeRut(searchTerm)
+
+    return itemRutNorm.includes(searchNorm)
+  })
+
+  // 📄 Paginación
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / PAGE_SIZE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE
+  const endIndex = startIndex + PAGE_SIZE
+  const paginatedHistory = filteredHistory.slice(startIndex, endIndex)
+
+  const formatRutDisplay = (rut, dv) => {
+    if (!rut) return "-"
+    const clean = rut.replace(/\./g, "")
+    return dv ? `${clean}-${dv}` : clean
+  }
+
+  const formatFecha = (iso) => {
+    if (!iso) return "-"
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return "-"
+    return d.toLocaleString("es-CL", {
+      dateStyle: "short",
+      timeStyle: "short",
+    })
+  }
 
   return (
     <div className="fixed inset-0 bg-background z-[100] overflow-auto">
@@ -35,12 +113,11 @@ export default function PatientHistory({ onClose }) {
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="p-2 rounded-lg hover:bg-secondary transition-colors"
-              aria-label="Cerrar"
+              className="inline-flex items-center gap-1 text-sm font-medium text-foreground hover:text-primary transition-colors"
+              type="button"
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <span className="text-lg leading-none">←</span>
+              <span>Volver</span>
             </button>
             <h2 className="text-xl font-semibold text-foreground">Historial de Búsquedas</h2>
             <Badge variant="secondary" className="ml-2">
@@ -55,18 +132,31 @@ export default function PatientHistory({ onClose }) {
         {/* Buscador */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle className="text-lg">Buscar en Historial</CardTitle>
+            <CardTitle className="text-lg">Buscar por RUT</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-2">
             <Input
               type="text"
-              placeholder="Buscar por RUT, nombre o ciudad..."
+              placeholder="11222333-4"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full"
+              onChange={handleSearchChange}
+              className="w-full font-mono"
             />
+            <p className="text-xs text-muted-foreground">
+              Ingresa el RUT sin puntos y con guion antes del dígito verificador.
+            </p>
           </CardContent>
         </Card>
+
+        {/* Estado de carga / error */}
+        {loading && (
+          <p className="mb-4 text-sm text-muted-foreground">Cargando historial de búsquedas...</p>
+        )}
+        {error && (
+          <p className="mb-4 text-sm text-red-500">
+            {error}
+          </p>
+        )}
 
         {/* Tabla de historial */}
         <Card>
@@ -75,36 +165,95 @@ export default function PatientHistory({ onClose }) {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 bg-secondary/50">
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">RUT</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Nombre Completo</th>
-                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">Ciudad</th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
+                      Fecha búsqueda
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
+                      RUT buscado
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
+                      Usuario
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
+                      Resultado
+                    </th>
+                    <th className="px-6 py-4 text-right text-sm font-semibold text-foreground">
+                      Acciones
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredHistory.length > 0 ? (
-                    filteredHistory.map((item) => (
-                      <tr key={item.id} className="border-b border-gray-200 hover:bg-secondary/30 transition-colors">
-                        <td className="px-6 py-4">
-                          <span className="font-mono text-sm text-foreground">{item.rut}</span>
+                  {paginatedHistory.length > 0 ? (
+                    paginatedHistory.map((item) => (
+                      <tr
+                        key={item.id_busqueda}
+                        className="border-b border-gray-200 hover:bg-secondary/30 transition-colors"
+                      >
+                        <td className="px-6 py-4 text-sm text-foreground">
+                          {formatFecha(item.fecha_hora_busqueda)}
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-sm text-foreground">{item.nombre}</span>
+                          <span className="font-mono text-sm text-foreground">
+                            {formatRutDisplay(item.rut_buscado, item.dv_buscado)}
+                          </span>
                         </td>
                         <td className="px-6 py-4">
-                          <Badge variant="outline">{item.ciudad}</Badge>
+                          <span className="text-sm text-foreground">
+                            {item.usuario?.nombre_completo || "—"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge
+                            variant={item.resultado_encontrado ? "outline" : "destructive"}
+                            className="text-xs"
+                          >
+                            {item.resultado_encontrado ? "Encontrado" : "No encontrado"}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            // Más adelante podemos pasar un onGoToPatient para abrir el visor con ese RUT
+                            // onClick={() => onGoToPatient?.(formatRutDisplay(item.rut_buscado, item.dv_buscado))}
+                          >
+                            Ir
+                          </Button>
                         </td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={3} className="px-6 py-12 text-center text-muted-foreground">
-                        No se encontraron resultados para "{searchTerm}"
+                      <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                        No se encontraron resultados
+                        {searchTerm ? ` para "${searchTerm}"` : ""}.
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Paginación */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 px-6 py-4">
+                {Array.from({ length: totalPages }).map((_, index) => {
+                  const page = index + 1
+                  return (
+                    <Button
+                      key={page}
+                      type="button"
+                      size="sm"
+                      variant={page === safeCurrentPage ? "default" : "outline"}
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  )
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

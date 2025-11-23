@@ -30,6 +30,12 @@ import LupaCentro from "./components/lupa-centro";
 // Huella / scanner gestionar usuarios
 import GestionarUsuariosIcon from "./components/gestionar-usuarios";
 
+// Historial visual (overlay)
+import PatientHistory from "./components/historial";
+
+// Loader de datos (nuevo)
+import LoadingDatos from "./components/loading-datos";
+
 // Botón UI
 import { Button } from "@/components/ui/button";
 
@@ -52,6 +58,9 @@ function App() {
   // "options" | "search" | "historial"
   const [homeMode, setHomeMode] = useState("options");
 
+  // 🔄 Loader mientras se consultan los datos del paciente
+  const [isLoadingPatient, setIsLoadingPatient] = useState(false);
+
   // Cargar usuario desde localStorage
   useEffect(() => {
     try {
@@ -71,6 +80,9 @@ function App() {
       setSelectedSection(null);
 
       if (homeMode !== "search") setHomeMode("search");
+
+      // 🔄 comienza loader
+      setIsLoadingPatient(true);
 
       // 👤 Tomamos el id del usuario logueado para enviarlo al backend
       const usuarioId = currentUser?.id || currentUser?.id_usuario || null;
@@ -94,6 +106,9 @@ function App() {
     } catch (err) {
       console.error("Error consultando backend:", err);
       setErrorMessage("Error conectando con el servidor");
+    } finally {
+      // 🛑 detener loader siempre
+      setIsLoadingPatient(false);
     }
   };
 
@@ -107,6 +122,7 @@ function App() {
     setSearchedRut(null);
     setSelectedSection(null);
     setErrorMessage("");
+    setIsLoadingPatient(false);
   };
 
   const handleLogout = () => {
@@ -123,6 +139,7 @@ function App() {
     setSelectedSection(null);
     setErrorMessage("");
     setHomeMode("options");
+    setIsLoadingPatient(false);
   };
 
   // Login si no hay usuario
@@ -150,6 +167,12 @@ function App() {
   const currentUserRole = currentUser?.rol || currentUser?.role;
   const isAdmin = (currentUserRole || "").toLowerCase() === "administrador";
 
+  const currentUserId =
+    currentUser?.id_usuario ??
+    currentUser?.id ??
+    currentUser?.usuario_id ??
+    null;
+
   const mapUserForProfile = (user) => ({
     ...user,
     name:
@@ -175,7 +198,6 @@ function App() {
 
       <div className="pt-20">
         <main className="mx-auto max-w-6xl px-4 pb-6">
-          {/* BOTÓN VOLVER ARRIBA */}
           {(homeMode !== "options" || searchedRut) && (
             <div className="mt-4 flex justify-center">
               <div className="w-full max-w-5xl flex justify-start">
@@ -192,7 +214,6 @@ function App() {
             </div>
           )}
 
-          {/* BARRA DE BÚSQUEDA */}
           {(homeMode === "search" || searchedRut) && (
             <div className="mt-2 flex justify-center">
               <div className="w-full max-w-5xl">
@@ -205,10 +226,8 @@ function App() {
             <p className="mt-2 text-sm text-red-500">{errorMessage}</p>
           )}
 
-          {/* ESTADO SIN PACIENTE */}
           {!searchedRut && !errorMessage && (
             <>
-              {/* MENÚ PRINCIPAL */}
               {homeMode === "options" && (
                 <div className="mt-24 flex flex-col items-center justify-center text-center text-muted-foreground">
                   <p className="text-lg font-semibold text-foreground">
@@ -223,7 +242,6 @@ function App() {
                       isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
                     }`}
                   >
-                    {/* Buscar registro */}
                     <button
                       type="button"
                       onClick={() => setHomeMode("search")}
@@ -243,7 +261,6 @@ function App() {
                       </p>
                     </button>
 
-                    {/* Ver historial */}
                     <button
                       type="button"
                       onClick={() => setHomeMode("historial")}
@@ -259,11 +276,10 @@ function App() {
                         Ver historial
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        Próximamente: historial de RUT consultados.
+                        Revisa las búsquedas recientes realizadas.
                       </p>
                     </button>
 
-                    {/* Gestionar usuarios — SOLO ADMIN */}
                     {isAdmin && (
                       <button
                         type="button"
@@ -288,41 +304,36 @@ function App() {
                 </div>
               )}
 
-              {/* MODO BUSCAR */}
               {homeMode === "search" && (
                 <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
-                  <div className="mb-4 flex items-center justify-center">
-                    <div className="scale-75 md:scale-90">
-                      <LupaCentro />
+                  {isLoadingPatient ? (
+                    // 🔄 Mientras carga, mostramos el componente de loading-datos
+                    <div className="mb-4 flex items-center justify-center">
+                      <LoadingDatos />
                     </div>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="mb-4 flex items-center justify-center">
+                        <div className="scale-75 md:scale-90 m-6">
+                          <LupaCentro />
+                        </div>
+                      </div>
 
-                  <p className="text-lg font-semibold text-foreground">
-                    Busca un paciente
-                  </p>
-                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                    Ingresa el RUT en la barra superior y presiona{" "}
-                    <span className="font-semibold">“Buscar”</span> para ver el
-                    resumen clínico unificado del paciente.
-                  </p>
-                </div>
-              )}
-
-              {/* MODO HISTORIAL */}
-              {homeMode === "historial" && (
-                <div className="mt-24 flex flex-col items-center justify-center text-center text-muted-foreground">
-                  <p className="text-lg font-semibold text-foreground">
-                    Historial de consultas
-                  </p>
-                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                    Este módulo se encuentra en desarrollo.
-                  </p>
+                      <p className="text-lg font-semibold text-foreground mt-5">
+                        Busca un paciente
+                      </p>
+                      <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                        Ingresa el RUT en la barra superior y presiona{" "}
+                        <span className="font-semibold">“Buscar”</span> para ver el
+                        resumen clínico unificado del paciente.
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
             </>
           )}
 
-          {/* PACIENTE CARGADO */}
           {searchedRut && (
             <div className="mt-6 flex gap-6">
               <div className="flex-1">
@@ -381,7 +392,13 @@ function App() {
         </main>
       </div>
 
-      {/* Gestión de usuarios */}
+      {homeMode === "historial" && (
+        <PatientHistory
+          onClose={() => setHomeMode("options")}
+          currentUserId={currentUserId}
+        />
+      )}
+
       {showUserManagement && (
         <UserManagement
           onClose={() => setShowUserManagement(false)}
@@ -392,12 +409,8 @@ function App() {
         />
       )}
 
-      {/* Perfil de usuario */}
       {showProfile && profileUser && (
-        <UserProfile
-          user={profileUser}
-          onClose={() => setShowProfile(false)}
-        />
+        <UserProfile user={profileUser} onClose={() => setShowProfile(false)} />
       )}
     </div>
   );

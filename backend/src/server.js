@@ -7,7 +7,7 @@ import patientRoutes from "./routes/patient.routes.js";
 import authRoutes from "./routes/auth.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import profileRoutes from "./routes/profile.routes.js";
-
+import auditRoutes from "./routes/audit.routes.js";
 
 
 const app = express();
@@ -49,6 +49,7 @@ app.use("/api/patient", patientRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/profile", profileRoutes);
+app.use("/api/auditoria", auditRoutes);
 
 /* ============================
    SERVIDOR
