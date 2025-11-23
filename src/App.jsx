@@ -72,7 +72,16 @@ function App() {
 
       if (homeMode !== "search") setHomeMode("search");
 
-      const res = await fetch(`${API_URL}/api/patient/${rut}`);
+      // 👤 Tomamos el id del usuario logueado para enviarlo al backend
+      const usuarioId = currentUser?.id || currentUser?.id_usuario || null;
+
+      const params = new URLSearchParams();
+      if (usuarioId) params.set("usuarioId", usuarioId);
+      params.set("sistema_origen", "VISOR_WEB");
+
+      const res = await fetch(
+        `${API_URL}/api/patient/${rut}?${params.toString()}`
+      );
       const data = await res.json();
 
       if (!res.ok) {

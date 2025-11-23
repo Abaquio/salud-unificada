@@ -1,5 +1,5 @@
 // backend/controllers/patient.controller.js
-import { coreClient, rayenClient } from "../config/supabaseClients.js";
+import { coreClient, rayenClient, auditClient } from "../config/supabaseClients.js";
 
 async function safeQuery(label, queryPromise, fallback = []) {
   const { data, error } = await queryPromise;
@@ -33,8 +33,38 @@ function normalizeRut(rawRut) {
   return { body, dv };
 }
 
+// 🔎 Registrar búsqueda en tabla busqueda_paciente_auditoria
+async function registrarBusquedaPaciente({
+  usuarioId,
+  rutBuscado,
+  dvBuscado,
+  sistemaOrigen,
+  resultadoEncontrado,
+  observacion,
+}) {
+  try {
+    await auditClient.from("busqueda_paciente_auditoria").insert({
+      usuario_id: usuarioId || null,
+      fecha_hora_busqueda: new Date().toISOString(),
+      rut_buscado: rutBuscado || null,
+      dv_buscado: dvBuscado || null,
+      sistema_origen: sistemaOrigen || "VISOR_WEB",
+      resultado_encontrado: resultadoEncontrado ?? false,
+      observacion: observacion || null,
+    });
+  } catch (e) {
+    console.error("❌ Error registrando búsqueda en auditoría:", e.message);
+    // Igual devolvemos la info al visor, no rompemos el flujo
+  }
+}
+
 export async function getPatientByRut(req, res) {
   const { rut: rutParam } = req.params;
+
+  // 👤 viene desde el front por query string
+  const { usuarioId, usuario_id, sistema_origen } = req.query;
+  const usuarioIdFinal = usuarioId || usuario_id || null;
+  const sistemaOrigenFinal = sistema_origen || "VISOR_WEB";
 
   if (!rutParam) {
     return res.status(400).json({ message: "Falta parámetro RUT" });
@@ -68,6 +98,20 @@ export async function getPatientByRut(req, res) {
 
     if (errorAps) console.error("❌ Error buscando paciente_aps:", errorAps.message);
     if (errorCore) console.error("❌ Error buscando paciente_core:", errorCore.message);
+
+    const resultadoEncontrado = Boolean(pacienteApsRaw || pacienteCore);
+
+    // 📝 Registrar auditoría de la búsqueda (exista o no el paciente)
+    await registrarBusquedaPaciente({
+      usuarioId: usuarioIdFinal,
+      rutBuscado: rut,
+      dvBuscado: dv,
+      sistemaOrigen: sistemaOrigenFinal,
+      resultadoEncontrado,
+      observacion: resultadoEncontrado
+        ? null
+        : "Paciente no encontrado ni en Rayen (APS) ni en CORE (Hospital)",
+    });
 
     if (!pacienteApsRaw && !pacienteCore) {
       return res.status(404).json({
