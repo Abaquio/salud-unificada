@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 
 const API_URL = import.meta.env.VITE_API_URL
 
-export default function PatientHistory({ onClose, currentUserId }) {
+export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoToRut }) {
   const [searchTerm, setSearchTerm] = useState("")
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
@@ -17,43 +17,44 @@ export default function PatientHistory({ onClose, currentUserId }) {
 
   const PAGE_SIZE = 6
 
-  // 🔡 Normaliza RUT para comparar (solo números y K, sin guion)
   const normalizeRut = (rut) => (rut || "").replace(/[^0-9Kk]/g, "").toUpperCase()
 
-  // 🧮 Formatea input como 11222333-4
   const formatRutInput = (value) => {
     let clean = value.replace(/[^0-9]/g, "")
-
-    // Máximo 9 dígitos (8 cuerpo + 1 dv)
     if (clean.length > 9) clean = clean.slice(0, 9)
-
     if (clean.length <= 8) return clean
-
     return `${clean.slice(0, 8)}-${clean.slice(8)}`
   }
 
   const handleSearchChange = (e) => {
     const formatted = formatRutInput(e.target.value)
     setSearchTerm(formatted)
-    setCurrentPage(1) // resetear a la primera página al buscar
+    setCurrentPage(1)
   }
 
-  // 🛰️ Cargar historial real del usuario logeado
+  // 🛰️ Cargar historial
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!currentUserId) return
+      // si NO es admin y no tenemos currentUserId, no hacemos nada
+      if (!isAdmin && !currentUserId) return
 
       try {
         setLoading(true)
         setError("")
 
         const params = new URLSearchParams()
-        params.set("usuarioId", currentUserId)
 
-        const res = await fetch(
-          `${API_URL}/api/auditoria/busquedas?${params.toString()}`
-        )
+        // si no es admin, filtramos por usuarioId
+        if (!isAdmin && currentUserId) {
+          params.set("usuarioId", currentUserId)
+        }
 
+        const queryString = params.toString()
+        const url = `${API_URL}/api/auditoria/busquedas${
+          queryString ? `?${queryString}` : ""
+        }`
+
+        const res = await fetch(url)
         const data = await res.json()
 
         if (!res.ok) {
@@ -70,7 +71,7 @@ export default function PatientHistory({ onClose, currentUserId }) {
     }
 
     fetchHistory()
-  }, [currentUserId])
+  }, [currentUserId, isAdmin])
 
   // 🧾 Filtrado en el frontend por RUT
   const filteredHistory = history.filter((item) => {
@@ -103,6 +104,14 @@ export default function PatientHistory({ onClose, currentUserId }) {
       dateStyle: "short",
       timeStyle: "short",
     })
+  }
+
+  const handleGoClick = (item) => {
+    if (!onGoToRut) return
+    const rutFormateado = formatRutDisplay(item.rut_buscado, item.dv_buscado)
+    if (rutFormateado && rutFormateado !== "-") {
+      onGoToRut(rutFormateado)
+    }
   }
 
   return (
@@ -150,7 +159,9 @@ export default function PatientHistory({ onClose, currentUserId }) {
 
         {/* Estado de carga / error */}
         {loading && (
-          <p className="mb-4 text-sm text-muted-foreground">Cargando historial de búsquedas...</p>
+          <p className="mb-4 text-sm text-muted-foreground">
+            Cargando historial de búsquedas...
+          </p>
         )}
         {error && (
           <p className="mb-4 text-sm text-red-500">
@@ -170,6 +181,9 @@ export default function PatientHistory({ onClose, currentUserId }) {
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
                       RUT buscado
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
+                      Paciente
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-semibold text-foreground">
                       Usuario
@@ -199,6 +213,11 @@ export default function PatientHistory({ onClose, currentUserId }) {
                         </td>
                         <td className="px-6 py-4">
                           <span className="text-sm text-foreground">
+                            {item.nombre_paciente || "—"}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-foreground">
                             {item.usuario?.nombre_completo || "—"}
                           </span>
                         </td>
@@ -215,8 +234,7 @@ export default function PatientHistory({ onClose, currentUserId }) {
                             type="button"
                             variant="outline"
                             size="sm"
-                            // Más adelante podemos pasar un onGoToPatient para abrir el visor con ese RUT
-                            // onClick={() => onGoToPatient?.(formatRutDisplay(item.rut_buscado, item.dv_buscado))}
+                            onClick={() => handleGoClick(item)}
                           >
                             Ir
                           </Button>
@@ -225,7 +243,7 @@ export default function PatientHistory({ onClose, currentUserId }) {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-muted-foreground">
+                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
                         No se encontraron resultados
                         {searchTerm ? ` para "${searchTerm}"` : ""}.
                       </td>

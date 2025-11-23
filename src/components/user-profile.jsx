@@ -27,8 +27,25 @@ export default function UserProfile({ user = {}, onClose }) {
   const rol = user.role || user.rol || "Usuario";
   const isActive = user.isActive ?? user.es_activo ?? true;
 
-  const createdAt = user.createdAt || user.created_at || "—";
-  const updatedAt = user.updatedAt || user.updated_at || "—";
+  // -----------------------------------------
+  // 🟦 FORMATO DE FECHAS (ÚNICO CAMBIO REAL)
+  // -----------------------------------------
+  const formatFecha = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("es-CL", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  };
+
+  const createdAtRaw = user.createdAt || user.created_at || "—";
+  const updatedAtRaw = user.updatedAt || user.updated_at || "—";
+
+  const createdAt = formatFecha(createdAtRaw);
+  const updatedAt = formatFecha(updatedAtRaw);
+  // -----------------------------------------
 
   const [saving, setSaving] = useState(false);
 
@@ -43,7 +60,7 @@ export default function UserProfile({ user = {}, onClose }) {
     password: "",
   });
 
-  // ✅ Nuevo: estado para la confirmación
+  // Confirmación
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
 
@@ -76,7 +93,6 @@ export default function UserProfile({ user = {}, onClose }) {
         return;
       }
 
-      // ✅ Mostrar confirmación elegante según el campo
       let msg = "Los cambios se guardaron correctamente.";
       if (field === "email") msg = "Tu correo electrónico fue actualizado correctamente.";
       if (field === "phone") msg = "Tu teléfono fue actualizado correctamente.";
@@ -206,7 +222,7 @@ export default function UserProfile({ user = {}, onClose }) {
               </CardContent>
             </Card>
 
-            {/* Información de Contacto - editable por campo */}
+            {/* Información de Contacto */}
             <Card>
               <CardHeader>
                 <CardTitle>Editar Información</CardTitle>
@@ -311,7 +327,6 @@ export default function UserProfile({ user = {}, onClose }) {
                         }
                       />
 
-                      {/* Iconos PRO de ver/ocultar */}
                       <button
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
@@ -342,8 +357,7 @@ export default function UserProfile({ user = {}, onClose }) {
                             fill="none"
                             stroke="currentColor"
                             strokeWidth={2}
-                            viewBox="0 0 24 24"
-                          >
+                            viewBox="0 0 24 24">
                             <path
                               strokeLinecap="round"
                               strokeLinejoin="round"
@@ -396,7 +410,6 @@ export default function UserProfile({ user = {}, onClose }) {
         </div>
       </div>
 
-      {/* ✅ Overlay de confirmación */}
       {showSuccess && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
           <Confirmacion

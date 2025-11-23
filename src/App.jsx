@@ -33,10 +33,12 @@ import GestionarUsuariosIcon from "./components/gestionar-usuarios";
 // Historial visual (overlay)
 import PatientHistory from "./components/historial";
 
-// Loader de datos (nuevo)
+// Loader de datos
 import LoadingDatos from "./components/loading-datos";
 
-// Botón UI
+// Modal "¿Estás seguro?" para logout
+import ConfirmLogout from "./components/estas-seguro";
+
 import { Button } from "@/components/ui/button";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -58,10 +60,12 @@ function App() {
   // "options" | "search" | "historial"
   const [homeMode, setHomeMode] = useState("options");
 
-  // 🔄 Loader mientras se consultan los datos del paciente
+  // Loader mientras se consultan los datos del paciente
   const [isLoadingPatient, setIsLoadingPatient] = useState(false);
 
-  // Cargar usuario desde localStorage
+  // Mostrar modal de confirmación de logout
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
@@ -81,11 +85,14 @@ function App() {
 
       if (homeMode !== "search") setHomeMode("search");
 
-      // 🔄 comienza loader
       setIsLoadingPatient(true);
 
-      // 👤 Tomamos el id del usuario logueado para enviarlo al backend
-      const usuarioId = currentUser?.id || currentUser?.id_usuario || null;
+      // 🔐 Asegurarnos de mandar siempre el id correcto del usuario
+      const usuarioId =
+        currentUser?.id_usuario ??
+        currentUser?.id ??
+        currentUser?.usuario_id ??
+        null;
 
       const params = new URLSearchParams();
       if (usuarioId) params.set("usuarioId", usuarioId);
@@ -107,7 +114,6 @@ function App() {
       console.error("Error consultando backend:", err);
       setErrorMessage("Error conectando con el servidor");
     } finally {
-      // 🛑 detener loader siempre
       setIsLoadingPatient(false);
     }
   };
@@ -116,7 +122,6 @@ function App() {
 
   const handleBackToPatient = () => setSelectedSection(null);
 
-  // Volver al menú principal
   const handleBackToMenu = () => {
     setHomeMode("options");
     setSearchedRut(null);
@@ -125,6 +130,7 @@ function App() {
     setIsLoadingPatient(false);
   };
 
+  // 🔐 Logout real (solo se llama si el usuario confirma)
   const handleLogout = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -142,7 +148,11 @@ function App() {
     setIsLoadingPatient(false);
   };
 
-  // Login si no hay usuario
+  // Click en "Cerrar sesión" del TopBar → solo abre el modal
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
   if (!isLoggedIn) {
     return (
       <Login
@@ -193,7 +203,7 @@ function App() {
           setShowProfile(true);
         }}
         onManageUsers={() => setShowUserManagement(true)}
-        onLogout={handleLogout}
+        onLogout={handleLogoutClick} // 👈 ahora muestra el modal, no cierra directo
       />
 
       <div className="pt-20">
@@ -307,19 +317,18 @@ function App() {
               {homeMode === "search" && (
                 <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
                   {isLoadingPatient ? (
-                    // 🔄 Mientras carga, mostramos el componente de loading-datos
                     <div className="mb-4 flex items-center justify-center">
                       <LoadingDatos />
                     </div>
                   ) : (
                     <>
                       <div className="mb-4 flex items-center justify-center">
-                        <div className="scale-75 md:scale-90 m-6">
+                        <div className="scale-75 md:scale-90">
                           <LupaCentro />
                         </div>
                       </div>
 
-                      <p className="text-lg font-semibold text-foreground mt-5">
+                      <p className="text-lg font-semibold text-foreground">
                         Busca un paciente
                       </p>
                       <p className="mt-1 max-w-md text-sm text-muted-foreground">
@@ -396,6 +405,12 @@ function App() {
         <PatientHistory
           onClose={() => setHomeMode("options")}
           currentUserId={currentUserId}
+          isAdmin={isAdmin} // para que el admin vea todo el historial
+          onGoToRut={(rut) => {
+            // cerrar historial y lanzar la búsqueda del RUT seleccionado
+            setHomeMode("search");
+            handleSearch(rut);
+          }}
         />
       )}
 
@@ -411,6 +426,17 @@ function App() {
 
       {showProfile && profileUser && (
         <UserProfile user={profileUser} onClose={() => setShowProfile(false)} />
+      )}
+
+      {/* Modal "¿Estás seguro de cerrar sesión?" */}
+      {showLogoutConfirm && (
+        <ConfirmLogout
+          onConfirm={() => {
+            setShowLogoutConfirm(false);
+            handleLogout();
+          }}
+          onCancel={() => setShowLogoutConfirm(false)}
+        />
       )}
     </div>
   );
