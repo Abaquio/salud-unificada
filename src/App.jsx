@@ -16,10 +16,22 @@ import HospitalAttentions from "./components/hospital-attentions";
 import Examinations from "./components/examinations";
 import Medications from "./components/medications";
 
-// Perfil de usuario
+// Perfil de usuario / gestión
 import UserProfile from "./components/user-profile";
-// Gestión de usuarios
 import UserManagement from "./components/user-management";
+
+// Opciones de inicio
+import BuscarRegistro from "./components/buscar-registro";
+import VerHistorial from "./components/ver-historial";
+
+// Lupa animada del centro
+import LupaCentro from "./components/lupa-centro";
+
+// Huella / scanner gestionar usuarios
+import GestionarUsuariosIcon from "./components/gestionar-usuarios";
+
+// Botón UI
+import { Button } from "@/components/ui/button";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const STORAGE_KEY = "salud_unificada_user";
@@ -37,13 +49,15 @@ function App() {
   const [selectedSection, setSelectedSection] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // recuperar usuario desde localStorage
+  // "options" | "search" | "historial"
+  const [homeMode, setHomeMode] = useState("options");
+
+  // Cargar usuario desde localStorage
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setCurrentUser(parsed);
+        setCurrentUser(JSON.parse(stored));
       }
     } catch (e) {
       console.error("No se pudo leer usuario almacenado:", e);
@@ -55,6 +69,8 @@ function App() {
       setErrorMessage("");
       setSearchedRut(null);
       setSelectedSection(null);
+
+      if (homeMode !== "search") setHomeMode("search");
 
       const res = await fetch(`${API_URL}/api/patient/${rut}`);
       const data = await res.json();
@@ -72,12 +88,16 @@ function App() {
     }
   };
 
-  const handleSectionSelect = (section) => {
-    setSelectedSection(section);
-  };
+  const handleSectionSelect = (section) => setSelectedSection(section);
 
-  const handleBackToPatient = () => {
+  const handleBackToPatient = () => setSelectedSection(null);
+
+  // Volver al menú principal
+  const handleBackToMenu = () => {
+    setHomeMode("options");
+    setSearchedRut(null);
     setSelectedSection(null);
+    setErrorMessage("");
   };
 
   const handleLogout = () => {
@@ -93,9 +113,10 @@ function App() {
     setSearchedRut(null);
     setSelectedSection(null);
     setErrorMessage("");
+    setHomeMode("options");
   };
 
-  // Si NO está logueado → login
+  // Login si no hay usuario
   if (!isLoggedIn) {
     return (
       <Login
@@ -118,6 +139,7 @@ function App() {
     "Administrador Salud Unificada";
 
   const currentUserRole = currentUser?.rol || currentUser?.role;
+  const isAdmin = (currentUserRole || "").toLowerCase() === "administrador";
 
   const mapUserForProfile = (user) => ({
     ...user,
@@ -133,7 +155,7 @@ function App() {
       <TopBar
         userName={currentUserDisplayName}
         role={currentUserRole}
-        isAdmin={(currentUserRole || "").toLowerCase() === "administrador"}
+        isAdmin={isAdmin}
         onProfileClick={() => {
           setProfileUser(mapUserForProfile(currentUser));
           setShowProfile(true);
@@ -144,31 +166,154 @@ function App() {
 
       <div className="pt-20">
         <main className="mx-auto max-w-6xl px-4 pb-6">
-          <SearchBar onSearch={handleSearch} />
+          {/* BOTÓN VOLVER ARRIBA */}
+          {(homeMode !== "options" || searchedRut) && (
+            <div className="mt-4 flex justify-center">
+              <div className="w-full max-w-5xl flex justify-start">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBackToMenu}
+                  className="gap-1 whitespace-nowrap"
+                >
+                  <span className="text-lg">←</span>
+                  <span>Volver al menú</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* BARRA DE BÚSQUEDA */}
+          {(homeMode === "search" || searchedRut) && (
+            <div className="mt-2 flex justify-center">
+              <div className="w-full max-w-5xl">
+                <SearchBar onSearch={handleSearch} />
+              </div>
+            </div>
+          )}
 
           {errorMessage && (
             <p className="mt-2 text-sm text-red-500">{errorMessage}</p>
           )}
 
+          {/* ESTADO SIN PACIENTE */}
           {!searchedRut && !errorMessage && (
-            <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
-              <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-primary/60 bg-primary/5 animate-pulse">
-                <span className="text-3xl">👤</span>
-                <span className="absolute -right-1 -bottom-1 text-xl">
-                  🔍
-                </span>
-              </div>
-              <p className="text-lg font-semibold text-foreground">
-                Busca un paciente
-              </p>
-              <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Ingresa el RUT en la barra superior y presiona{" "}
-                <span className="font-semibold">“Buscar”</span> para ver el
-                resumen clínico unificado del paciente.
-              </p>
-            </div>
+            <>
+              {/* MENÚ PRINCIPAL */}
+              {homeMode === "options" && (
+                <div className="mt-24 flex flex-col items-center justify-center text-center text-muted-foreground">
+                  <p className="text-lg font-semibold text-foreground">
+                    ¿Qué deseas hacer?
+                  </p>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Selecciona una opción para comenzar.
+                  </p>
+
+                  <div
+                    className={`mt-10 grid w-full max-w-5xl grid-cols-1 gap-8 ${
+                      isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
+                    }`}
+                  >
+                    {/* Buscar registro */}
+                    <button
+                      type="button"
+                      onClick={() => setHomeMode("search")}
+                      className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                    >
+                      <div className="flex h-32 items-center justify-center">
+                        <div className="scale-90 md:scale-100 transition group-hover:scale-105">
+                          <BuscarRegistro />
+                        </div>
+                      </div>
+
+                      <p className="mt-4 text-base font-semibold text-slate-800">
+                        Buscar registro
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Ingresar RUT y ver resumen clínico unificado.
+                      </p>
+                    </button>
+
+                    {/* Ver historial */}
+                    <button
+                      type="button"
+                      onClick={() => setHomeMode("historial")}
+                      className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                    >
+                      <div className="flex h-32 items-center justify-center">
+                        <div className="scale-75 md:scale-90 transition group-hover:scale-100">
+                          <VerHistorial />
+                        </div>
+                      </div>
+
+                      <p className="mt-4 text-base font-semibold text-slate-800">
+                        Ver historial
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Próximamente: historial de RUT consultados.
+                      </p>
+                    </button>
+
+                    {/* Gestionar usuarios — SOLO ADMIN */}
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setShowUserManagement(true)}
+                        className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                      >
+                        <div className="flex h-32 items-center justify-center">
+                          <div className="transition group-hover:scale-105">
+                            <GestionarUsuariosIcon />
+                          </div>
+                        </div>
+
+                        <p className="mt-4 text-base font-semibold text-slate-800">
+                          Gestionar usuarios
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Crear, editar y administrar cuentas de acceso.
+                        </p>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* MODO BUSCAR */}
+              {homeMode === "search" && (
+                <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
+                  <div className="mb-4 flex items-center justify-center">
+                    <div className="scale-75 md:scale-90">
+                      <LupaCentro />
+                    </div>
+                  </div>
+
+                  <p className="text-lg font-semibold text-foreground">
+                    Busca un paciente
+                  </p>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Ingresa el RUT en la barra superior y presiona{" "}
+                    <span className="font-semibold">“Buscar”</span> para ver el
+                    resumen clínico unificado del paciente.
+                  </p>
+                </div>
+              )}
+
+              {/* MODO HISTORIAL */}
+              {homeMode === "historial" && (
+                <div className="mt-24 flex flex-col items-center justify-center text-center text-muted-foreground">
+                  <p className="text-lg font-semibold text-foreground">
+                    Historial de consultas
+                  </p>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Este módulo se encuentra en desarrollo.
+                  </p>
+                </div>
+              )}
+            </>
           )}
 
+          {/* PACIENTE CARGADO */}
           {searchedRut && (
             <div className="mt-6 flex gap-6">
               <div className="flex-1">
@@ -227,7 +372,7 @@ function App() {
         </main>
       </div>
 
-      {/* Overlay gestión de usuarios (solo admins) */}
+      {/* Gestión de usuarios */}
       {showUserManagement && (
         <UserManagement
           onClose={() => setShowUserManagement(false)}
@@ -238,7 +383,7 @@ function App() {
         />
       )}
 
-      {/* Overlay perfil (propio u otro usuario) */}
+      {/* Perfil de usuario */}
       {showProfile && profileUser && (
         <UserProfile
           user={profileUser}
