@@ -117,7 +117,7 @@ export async function updateUserStatus(req, res) {
   }
 }
 
-// POST /api/users
+// POST /api/users  ➜ **Aquí está la corrección**
 export async function createUser(req, res) {
   try {
     const {
@@ -128,7 +128,7 @@ export async function createUser(req, res) {
       telefono,
       direccion,
       es_activo = true,
-      provisional_password, // contraseña provisoria en texto plano
+      provisional_password,
     } = req.body || {};
 
     if (!nombre_completo || !correo || !rut_completo || !rol_nombre) {
@@ -147,6 +147,7 @@ export async function createUser(req, res) {
       });
     }
 
+    // ---- 🔍 VALIDAR RUT ----
     const [rutNumero, dvRaw] = String(rut_completo).split("-");
     if (!rutNumero || !dvRaw) {
       return res
@@ -154,6 +155,29 @@ export async function createUser(req, res) {
         .json({ ok: false, message: "rut_completo inválido" });
     }
     const dv = dvRaw.toUpperCase();
+
+    // 🚫 **EVITAR RUT DUPLICADO**
+    const { data: existingUser, error: existingError } = await auditClient
+      .from(USER_TABLE)
+      .select("id_usuario")
+      .eq("rut", rutNumero)
+      .eq("dv", dv)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error("Error verificando RUT duplicado:", existingError);
+      return res.status(500).json({
+        ok: false,
+        message: "Error interno al verificar RUT existente",
+      });
+    }
+
+    if (existingUser) {
+      return res.status(400).json({
+        ok: false,
+        message: `Ya existe un usuario registrado con el RUT ${rut_completo}`,
+      });
+    }
 
     // Buscar rol_id por nombre
     const { data: rolData, error: rolError } = await auditClient
@@ -172,6 +196,7 @@ export async function createUser(req, res) {
     // Hashear contraseña provisoria
     const password_hash = await bcrypt.hash(provisional_password, 10);
 
+    // INSERTAR USUARIO
     const { data, error } = await auditClient
       .from(USER_TABLE)
       .insert({
@@ -183,7 +208,7 @@ export async function createUser(req, res) {
         direccion,
         rol_id: rolData.id,
         es_activo,
-        password_hash, // se almacena hasheada
+        password_hash,
       })
       .select(
         `

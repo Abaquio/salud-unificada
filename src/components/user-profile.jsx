@@ -5,9 +5,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import Confirmacion from "./confirmacion"; // 👈 ajusta la ruta si es necesario
+
+const API_URL = import.meta.env.VITE_API_URL;
 
 export default function UserProfile({ user = {}, onClose }) {
-  // Nombre seguro, usando lo que venga del backend
   const safeName =
     user.name ||
     user.nombre ||
@@ -20,36 +22,92 @@ export default function UserProfile({ user = {}, onClose }) {
     .map((n) => n[0]?.toUpperCase())
     .join("");
 
-  // Datos reales que vienen del login
   const email = user.email || user.correo || "";
   const phone = user.phone || user.telefono || "";
-  const rol =
-    user.role || user.rol || user.rol_nombre || user.rolNombre || "Usuario";
-  const isActive =
-    typeof user.isActive === "boolean"
-      ? user.isActive
-      : typeof user.es_activo === "boolean"
-      ? user.es_activo
-      : true;
+  const rol = user.role || user.rol || "Usuario";
+  const isActive = user.isActive ?? user.es_activo ?? true;
 
-  const createdAt = user.createdAt || user.created_at || "—";
-  const updatedAt = user.updatedAt || user.updated_at || "—";
+  // -----------------------------------------
+  // 🟦 FORMATO DE FECHAS (ÚNICO CAMBIO REAL)
+  // -----------------------------------------
+  const formatFecha = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("es-CL", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+  };
 
-  const [isEditing, setIsEditing] = useState(false);
+  const createdAtRaw = user.createdAt || user.created_at || "—";
+  const updatedAtRaw = user.updatedAt || user.updated_at || "—";
+
+  const createdAt = formatFecha(createdAtRaw);
+  const updatedAt = formatFecha(updatedAtRaw);
+  // -----------------------------------------
+
+  const [saving, setSaving] = useState(false);
+
+  // Estados de edición individual
+  const [editingField, setEditingField] = useState(null);
+
+  const [showPassword, setShowPassword] = useState(false);
+
   const [formData, setFormData] = useState({
     email,
     phone,
     password: "",
   });
 
+  // Confirmación
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSave = () => {
-    // Aquí en el futuro llamarías a tu endpoint de actualización de usuario
-    console.log("[Visor Salud Unificada] Guardando cambios:", formData);
-    setIsEditing(false);
+  const handleSave = async (field) => {
+    try {
+      setSaving(true);
+
+      const payload = {};
+      if (field === "email") payload.email = formData.email;
+      if (field === "phone") payload.telefono = formData.phone;
+      if (field === "password") payload.password = formData.password;
+
+      const res = await fetch(
+        `${API_URL}/api/profile/${user.id || user.id_usuario}`,
+        {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        alert("❌ Error al actualizar: " + data.message);
+        return;
+      }
+
+      let msg = "Los cambios se guardaron correctamente.";
+      if (field === "email") msg = "Tu correo electrónico fue actualizado correctamente.";
+      if (field === "phone") msg = "Tu teléfono fue actualizado correctamente.";
+      if (field === "password") msg = "Tu contraseña fue actualizada correctamente.";
+
+      setSuccessMessage(msg);
+      setShowSuccess(true);
+
+      setEditingField(null);
+    } catch (err) {
+      console.error(err);
+      alert("❌ Error inesperado al actualizar");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -120,25 +178,22 @@ export default function UserProfile({ user = {}, onClose }) {
               </CardContent>
             </Card>
 
-            {/* Estado del Usuario */}
+            {/* Información general */}
             <Card>
               <CardHeader>
                 <CardTitle>Información General</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
+                  <div>
                     <p className="text-sm text-muted-foreground">Estado</p>
-                    <Badge
-                      variant={isActive ? "default" : "secondary"}
-                      className="text-base px-3 py-1"
-                    >
+                    <Badge variant={isActive ? "default" : "secondary"}>
                       {isActive ? "Activo" : "Inactivo"}
                     </Badge>
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <p className="text-sm text-muted-foreground">Rol</p>
-                    <p className="text-lg font-medium">{rol}</p>
+                    <p className="font-medium">{rol}</p>
                   </div>
                 </div>
               </CardContent>
@@ -151,105 +206,219 @@ export default function UserProfile({ user = {}, onClose }) {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
+                  <div>
                     <p className="text-sm text-muted-foreground">
                       Fecha de Creación
                     </p>
-                    <p className="text-lg font-medium">{createdAt}</p>
+                    <p className="font-medium">{createdAt}</p>
                   </div>
-                  <div className="space-y-2">
+                  <div>
                     <p className="text-sm text-muted-foreground">
                       Última Actualización
                     </p>
-                    <p className="text-lg font-medium">{updatedAt}</p>
+                    <p className="font-medium">{updatedAt}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Formulario de Edición */}
+            {/* Información de Contacto */}
             <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle>Información de Contacto</CardTitle>
-                {!isEditing && (
-                  <Button variant="outline" onClick={() => setIsEditing(true)}>
-                    Editar
-                  </Button>
-                )}
+              <CardHeader>
+                <CardTitle>Editar Información</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">
-                    Correo Electrónico
-                  </label>
-                  <Input
-                    type="email"
-                    value={formData.email}
-                    onChange={(e) => handleChange("email", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="correo@ejemplo.com"
-                    className="text-base"
-                  />
-                </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Teléfono</label>
-                  <Input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => handleChange("phone", e.target.value)}
-                    disabled={!isEditing}
-                    placeholder="+56 9 1234 5678"
-                    className="text-base"
-                  />
-                </div>
-
-                {isEditing && (
-                  <div className="space-y-2">
+              <CardContent className="space-y-6">
+                {/* EMAIL */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
                     <label className="text-sm font-medium">
-                      Nueva Contraseña (opcional)
+                      Correo electrónico
                     </label>
                     <Input
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) =>
-                        handleChange("password", e.target.value)
-                      }
-                      placeholder="••••••••"
-                      className="text-base"
+                      type="email"
+                      disabled={editingField !== "email"}
+                      value={formData.email}
+                      onChange={(e) => handleChange("email", e.target.value)}
                     />
-                    <p className="text-xs text-muted-foreground">
-                      Deja en blanco si no deseas cambiar la contraseña
-                    </p>
                   </div>
-                )}
 
-                {isEditing && (
-                  <div className="flex gap-3 pt-4">
-                    <Button onClick={handleSave} size="lg">
-                      Guardar Cambios
-                    </Button>
+                  {editingField !== "email" ? (
                     <Button
                       variant="outline"
-                      size="lg"
-                      onClick={() => {
-                        setIsEditing(false);
-                        setFormData({
-                          email,
-                          phone,
-                          password: "",
-                        });
-                      }}
+                      onClick={() => setEditingField("email")}
                     >
-                      Cancelar
+                      Editar
                     </Button>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => handleSave("email")}
+                        disabled={saving}
+                      >
+                        Guardar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setEditingField(null);
+                          setFormData((p) => ({ ...p, email }));
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                {/* TELÉFONO */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium">Teléfono</label>
+                    <Input
+                      type="tel"
+                      disabled={editingField !== "phone"}
+                      value={formData.phone}
+                      onChange={(e) => handleChange("phone", e.target.value)}
+                    />
                   </div>
-                )}
+
+                  {editingField !== "phone" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setEditingField("phone")}
+                    >
+                      Editar
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => handleSave("phone")}
+                        disabled={saving}
+                      >
+                        Guardar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setEditingField(null);
+                          setFormData((p) => ({ ...p, phone }));
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                {/* CONTRASEÑA */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium">
+                      Nueva contraseña
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        disabled={editingField !== "password"}
+                        value={formData.password}
+                        onChange={(e) =>
+                          handleChange("password", e.target.value)
+                        }
+                      />
+
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      >
+                        {showPassword ? (
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            viewBox="0 0 24 24"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M13.875 18.825A10.05 10.05 0 0112 19c-4.477 0-8.268-2.943-9.542-7a9.964 9.964 0 012.547-4.391M9.878 9.878a3 3 0 104.243 4.243"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M3 3l18 18"
+                            />
+                          </svg>
+                        ) : (
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                            />
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                            />
+                          </svg>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Déjalo vacío si no deseas cambiar tu contraseña.
+                    </p>
+                  </div>
+
+                  {editingField !== "password" ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => setEditingField("password")}
+                    >
+                      Cambiar
+                    </Button>
+                  ) : (
+                    <>
+                      <Button
+                        onClick={() => handleSave("password")}
+                        disabled={saving}
+                      >
+                        Guardar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setEditingField(null);
+                          setFormData((p) => ({ ...p, password: "" }));
+                        }}
+                      >
+                        Cancelar
+                      </Button>
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      {showSuccess && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+          <Confirmacion
+            title="Actualización exitosa"
+            message={successMessage}
+            onClose={() => setShowSuccess(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }

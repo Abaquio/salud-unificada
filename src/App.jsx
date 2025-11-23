@@ -16,10 +16,30 @@ import HospitalAttentions from "./components/hospital-attentions";
 import Examinations from "./components/examinations";
 import Medications from "./components/medications";
 
-// Perfil de usuario
+// Perfil de usuario / gestión
 import UserProfile from "./components/user-profile";
-// Gestión de usuarios
 import UserManagement from "./components/user-management";
+
+// Opciones de inicio
+import BuscarRegistro from "./components/buscar-registro";
+import VerHistorial from "./components/ver-historial";
+
+// Lupa animada del centro
+import LupaCentro from "./components/lupa-centro";
+
+// Huella / scanner gestionar usuarios
+import GestionarUsuariosIcon from "./components/gestionar-usuarios";
+
+// Historial visual (overlay)
+import PatientHistory from "./components/historial";
+
+// Loader de datos
+import LoadingDatos from "./components/loading-datos";
+
+// Modal "¿Estás seguro?" para logout
+import ConfirmLogout from "./components/estas-seguro";
+
+import { Button } from "@/components/ui/button";
 
 const API_URL = import.meta.env.VITE_API_URL;
 const STORAGE_KEY = "salud_unificada_user";
@@ -37,13 +57,20 @@ function App() {
   const [selectedSection, setSelectedSection] = useState(null);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // recuperar usuario desde localStorage
+  // "options" | "search" | "historial"
+  const [homeMode, setHomeMode] = useState("options");
+
+  // Loader mientras se consultan los datos del paciente
+  const [isLoadingPatient, setIsLoadingPatient] = useState(false);
+
+  // Mostrar modal de confirmación de logout
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
   useEffect(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored);
-        setCurrentUser(parsed);
+        setCurrentUser(JSON.parse(stored));
       }
     } catch (e) {
       console.error("No se pudo leer usuario almacenado:", e);
@@ -56,7 +83,24 @@ function App() {
       setSearchedRut(null);
       setSelectedSection(null);
 
-      const res = await fetch(`${API_URL}/api/patient/${rut}`);
+      if (homeMode !== "search") setHomeMode("search");
+
+      setIsLoadingPatient(true);
+
+      // 🔐 Asegurarnos de mandar siempre el id correcto del usuario
+      const usuarioId =
+        currentUser?.id_usuario ??
+        currentUser?.id ??
+        currentUser?.usuario_id ??
+        null;
+
+      const params = new URLSearchParams();
+      if (usuarioId) params.set("usuarioId", usuarioId);
+      params.set("sistema_origen", "VISOR_WEB");
+
+      const res = await fetch(
+        `${API_URL}/api/patient/${rut}?${params.toString()}`
+      );
       const data = await res.json();
 
       if (!res.ok) {
@@ -69,17 +113,24 @@ function App() {
     } catch (err) {
       console.error("Error consultando backend:", err);
       setErrorMessage("Error conectando con el servidor");
+    } finally {
+      setIsLoadingPatient(false);
     }
   };
 
-  const handleSectionSelect = (section) => {
-    setSelectedSection(section);
-  };
+  const handleSectionSelect = (section) => setSelectedSection(section);
 
-  const handleBackToPatient = () => {
+  const handleBackToPatient = () => setSelectedSection(null);
+
+  const handleBackToMenu = () => {
+    setHomeMode("options");
+    setSearchedRut(null);
     setSelectedSection(null);
+    setErrorMessage("");
+    setIsLoadingPatient(false);
   };
 
+  // 🔐 Logout real (solo se llama si el usuario confirma)
   const handleLogout = () => {
     try {
       localStorage.removeItem(STORAGE_KEY);
@@ -93,9 +144,15 @@ function App() {
     setSearchedRut(null);
     setSelectedSection(null);
     setErrorMessage("");
+    setHomeMode("options");
+    setIsLoadingPatient(false);
   };
 
-  // Si NO está logueado → login
+  // Click en "Cerrar sesión" del TopBar → solo abre el modal
+  const handleLogoutClick = () => {
+    setShowLogoutConfirm(true);
+  };
+
   if (!isLoggedIn) {
     return (
       <Login
@@ -118,6 +175,13 @@ function App() {
     "Administrador Salud Unificada";
 
   const currentUserRole = currentUser?.rol || currentUser?.role;
+  const isAdmin = (currentUserRole || "").toLowerCase() === "administrador";
+
+  const currentUserId =
+    currentUser?.id_usuario ??
+    currentUser?.id ??
+    currentUser?.usuario_id ??
+    null;
 
   const mapUserForProfile = (user) => ({
     ...user,
@@ -133,40 +197,150 @@ function App() {
       <TopBar
         userName={currentUserDisplayName}
         role={currentUserRole}
-        isAdmin={(currentUserRole || "").toLowerCase() === "administrador"}
+        isAdmin={isAdmin}
         onProfileClick={() => {
           setProfileUser(mapUserForProfile(currentUser));
           setShowProfile(true);
         }}
         onManageUsers={() => setShowUserManagement(true)}
-        onLogout={handleLogout}
+        onLogout={handleLogoutClick} // 👈 ahora muestra el modal, no cierra directo
       />
 
       <div className="pt-20">
         <main className="mx-auto max-w-6xl px-4 pb-6">
-          <SearchBar onSearch={handleSearch} />
+          {(homeMode !== "options" || searchedRut) && (
+            <div className="mt-4 flex justify-center">
+              <div className="w-full max-w-5xl flex justify-start">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBackToMenu}
+                  className="gap-1 whitespace-nowrap"
+                >
+                  <span className="text-lg">←</span>
+                  <span>Volver al menú</span>
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {(homeMode === "search" || searchedRut) && (
+            <div className="mt-2 flex justify-center">
+              <div className="w-full max-w-5xl">
+                <SearchBar onSearch={handleSearch} />
+              </div>
+            </div>
+          )}
 
           {errorMessage && (
             <p className="mt-2 text-sm text-red-500">{errorMessage}</p>
           )}
 
           {!searchedRut && !errorMessage && (
-            <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
-              <div className="relative mb-4 flex h-20 w-20 items-center justify-center rounded-full border border-dashed border-primary/60 bg-primary/5 animate-pulse">
-                <span className="text-3xl">👤</span>
-                <span className="absolute -right-1 -bottom-1 text-xl">
-                  🔍
-                </span>
-              </div>
-              <p className="text-lg font-semibold text-foreground">
-                Busca un paciente
-              </p>
-              <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                Ingresa el RUT en la barra superior y presiona{" "}
-                <span className="font-semibold">“Buscar”</span> para ver el
-                resumen clínico unificado del paciente.
-              </p>
-            </div>
+            <>
+              {homeMode === "options" && (
+                <div className="mt-24 flex flex-col items-center justify-center text-center text-muted-foreground">
+                  <p className="text-lg font-semibold text-foreground">
+                    ¿Qué deseas hacer?
+                  </p>
+                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                    Selecciona una opción para comenzar.
+                  </p>
+
+                  <div
+                    className={`mt-10 grid w-full max-w-5xl grid-cols-1 gap-8 ${
+                      isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setHomeMode("search")}
+                      className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                    >
+                      <div className="flex h-32 items-center justify-center">
+                        <div className="scale-90 md:scale-100 transition group-hover:scale-105">
+                          <BuscarRegistro />
+                        </div>
+                      </div>
+
+                      <p className="mt-4 text-base font-semibold text-slate-800">
+                        Buscar registro
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Ingresar RUT y ver resumen clínico unificado.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setHomeMode("historial")}
+                      className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                    >
+                      <div className="flex h-32 items-center justify-center">
+                        <div className="scale-75 md:scale-90 transition group-hover:scale-100">
+                          <VerHistorial />
+                        </div>
+                      </div>
+
+                      <p className="mt-4 text-base font-semibold text-slate-800">
+                        Ver historial
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Revisa las búsquedas recientes realizadas.
+                      </p>
+                    </button>
+
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={() => setShowUserManagement(true)}
+                        className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                      >
+                        <div className="flex h-32 items-center justify-center">
+                          <div className="transition group-hover:scale-105">
+                            <GestionarUsuariosIcon />
+                          </div>
+                        </div>
+
+                        <p className="mt-4 text-base font-semibold text-slate-800">
+                          Gestionar usuarios
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Crear, editar y administrar cuentas de acceso.
+                        </p>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {homeMode === "search" && (
+                <div className="mt-16 flex flex-col items-center justify-center text-center text-muted-foreground">
+                  {isLoadingPatient ? (
+                    <div className="mb-4 flex items-center justify-center">
+                      <LoadingDatos />
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-4 flex items-center justify-center">
+                        <div className="scale-75 md:scale-90">
+                          <LupaCentro />
+                        </div>
+                      </div>
+
+                      <p className="text-lg font-semibold text-foreground">
+                        Busca un paciente
+                      </p>
+                      <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                        Ingresa el RUT en la barra superior y presiona{" "}
+                        <span className="font-semibold">“Buscar”</span> para ver el
+                        resumen clínico unificado del paciente.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+            </>
           )}
 
           {searchedRut && (
@@ -227,7 +401,19 @@ function App() {
         </main>
       </div>
 
-      {/* Overlay gestión de usuarios (solo admins) */}
+      {homeMode === "historial" && (
+        <PatientHistory
+          onClose={() => setHomeMode("options")}
+          currentUserId={currentUserId}
+          isAdmin={isAdmin} // para que el admin vea todo el historial
+          onGoToRut={(rut) => {
+            // cerrar historial y lanzar la búsqueda del RUT seleccionado
+            setHomeMode("search");
+            handleSearch(rut);
+          }}
+        />
+      )}
+
       {showUserManagement && (
         <UserManagement
           onClose={() => setShowUserManagement(false)}
@@ -238,11 +424,18 @@ function App() {
         />
       )}
 
-      {/* Overlay perfil (propio u otro usuario) */}
       {showProfile && profileUser && (
-        <UserProfile
-          user={profileUser}
-          onClose={() => setShowProfile(false)}
+        <UserProfile user={profileUser} onClose={() => setShowProfile(false)} />
+      )}
+
+      {/* Modal "¿Estás seguro de cerrar sesión?" */}
+      {showLogoutConfirm && (
+        <ConfirmLogout
+          onConfirm={() => {
+            setShowLogoutConfirm(false);
+            handleLogout();
+          }}
+          onCancel={() => setShowLogoutConfirm(false)}
         />
       )}
     </div>

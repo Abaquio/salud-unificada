@@ -1,5 +1,9 @@
 // backend/controllers/patient.controller.js
-import { coreClient, rayenClient } from "../config/supabaseClients.js";
+import {
+  coreClient,
+  rayenClient,
+  auditClient,
+} from "../config/supabaseClients.js";
 
 async function safeQuery(label, queryPromise, fallback = []) {
   const { data, error } = await queryPromise;
@@ -33,8 +37,47 @@ function normalizeRut(rawRut) {
   return { body, dv };
 }
 
+// 📝 Registrar búsqueda de paciente en auditoría
+async function registrarBusquedaPaciente({
+  usuarioId,
+  rutBuscado,
+  dvBuscado,
+  sistemaOrigen,
+  resultadoEncontrado,
+  observacion,
+}) {
+  // 🔒 Si no viene usuarioId, NO registramos la búsqueda
+  if (!usuarioId) {
+    console.warn(
+      "[AUDITORIA] Búsqueda sin usuarioId, no se registra en busqueda_paciente_auditoria",
+      { rutBuscado, dvBuscado }
+    );
+    return;
+  }
+
+  try {
+    await auditClient.from("busqueda_paciente_auditoria").insert({
+      usuario_id: usuarioId,
+      fecha_hora_busqueda: new Date().toISOString(),
+      rut_buscado: rutBuscado || null,
+      dv_buscado: dvBuscado || null,
+      sistema_origen: sistemaOrigen || "VISOR_WEB",
+      resultado_encontrado: resultadoEncontrado ?? false,
+      observacion: observacion || null,
+    });
+  } catch (e) {
+    console.error("❌ Error registrando búsqueda en auditoría:", e.message);
+    // No rompemos el flujo del visor si falla la auditoría
+  }
+}
+
 export async function getPatientByRut(req, res) {
   const { rut: rutParam } = req.params;
+
+  // Datos del usuario/sistema que hace la búsqueda (vienen del front)
+  const { usuarioId, usuario_id, sistema_origen } = req.query;
+  const usuarioIdFinal = usuarioId || usuario_id || null;
+  const sistemaOrigenFinal = sistema_origen || "VISOR_WEB";
 
   if (!rutParam) {
     return res.status(400).json({ message: "Falta parámetro RUT" });
@@ -66,18 +109,34 @@ export async function getPatientByRut(req, res) {
         .maybeSingle(),
     ]);
 
-    if (errorAps) console.error("❌ Error buscando paciente_aps:", errorAps.message);
-    if (errorCore) console.error("❌ Error buscando paciente_core:", errorCore.message);
+    if (errorAps)
+      console.error("❌ Error buscando paciente_aps:", errorAps.message);
+    if (errorCore)
+      console.error("❌ Error buscando paciente_core:", errorCore.message);
+
+    const resultadoEncontrado = Boolean(pacienteApsRaw || pacienteCore);
+
+    // 🧾 Registrar SIEMPRE la búsqueda cuando viene usuarioId
+    await registrarBusquedaPaciente({
+      usuarioId: usuarioIdFinal,
+      rutBuscado: rut,
+      dvBuscado: dv,
+      sistemaOrigen: sistemaOrigenFinal,
+      resultadoEncontrado,
+      observacion: resultadoEncontrado
+        ? null
+        : "Paciente no encontrado ni en Rayen (APS) ni en CORE (Hospital)",
+    });
 
     if (!pacienteApsRaw && !pacienteCore) {
       return res.status(404).json({
-        message: "Paciente no encontrado ni en Rayen (APS) ni en CORE (Hospital)",
+        message:
+          "Paciente no encontrado ni en Rayen (APS) ni en CORE (Hospital)",
       });
     }
 
     // 2) Enriquecer APS (médico cabecera y sector)
     let pacienteAps = pacienteApsRaw;
-
     if (pacienteApsRaw) {
       const [medicoRow, sectorRow] = await Promise.all([
         pacienteApsRaw.medico_cabecera_id
@@ -120,7 +179,6 @@ export async function getPatientByRut(req, res) {
 
     // ---- APS / RAYEN ----
     if (pacienteApsId) {
-      // Atenciones APS con profesional + establecimiento
       consultasPromises.push(
         safeQuery(
           "atencion_aps",
@@ -130,10 +188,7 @@ export async function getPatientByRut(req, res) {
               `
               *,
               profesional_aps (
-                nombre_completo,
-                tipo_profesional_aps (
-                  nombre
-                )
+                nombre_completo
               ),
               establecimiento_aps (
                 nombre
@@ -145,7 +200,6 @@ export async function getPatientByRut(req, res) {
         )
       );
 
-      // Derivaciones APS
       consultasPromises.push(
         safeQuery(
           "derivacion_aps",
@@ -163,7 +217,6 @@ export async function getPatientByRut(req, res) {
 
     // ---- CORE / HOSPITAL ----
     if (pacienteCoreId) {
-      // URGENCIAS + profesional
       consultasPromises.push(
         safeQuery(
           "urgencia_hosp",
@@ -182,7 +235,6 @@ export async function getPatientByRut(req, res) {
         )
       );
 
-      // CONSULTAS CAE + profesional + especialidad
       consultasPromises.push(
         safeQuery(
           "consulta_cae",
@@ -204,7 +256,6 @@ export async function getPatientByRut(req, res) {
         )
       );
 
-      // HOSPITALIZACIONES + servicio clínico
       consultasPromises.push(
         safeQuery(
           "hospitalizacion",
@@ -223,7 +274,6 @@ export async function getPatientByRut(req, res) {
         )
       );
 
-      // EXÁMENES LABORATORIO + profesional que valida
       consultasPromises.push(
         safeQuery(
           "examen_laboratorio",
@@ -242,7 +292,6 @@ export async function getPatientByRut(req, res) {
         )
       );
 
-      // EXÁMENES IMAGEN + profesional informante
       consultasPromises.push(
         safeQuery(
           "examen_imagen",
@@ -261,7 +310,6 @@ export async function getPatientByRut(req, res) {
         )
       );
 
-      // MEDICAMENTOS
       consultasPromises.push(
         safeQuery(
           "medicamento_hosp",
@@ -273,7 +321,6 @@ export async function getPatientByRut(req, res) {
         )
       );
     } else {
-      // si no hay paciente en CORE rellenamos arreglos vacíos
       consultasPromises.push(Promise.resolve([])); // urgencias
       consultasPromises.push(Promise.resolve([])); // consultas_cae
       consultasPromises.push(Promise.resolve([])); // hospitalizaciones
@@ -295,70 +342,43 @@ export async function getPatientByRut(req, res) {
 
     // ---- Enriquecer datos ----
 
-    // Atenciones APS
     const atencionesAps = (atencionesApsRaw || []).map((a) => ({
       ...a,
       profesional_nombre:
-        a.profesional_nombre ??
-        a.profesional_aps?.nombre_completo ??
-        null,
-      profesional_tipo:
-        a.profesional_tipo ??
-        a.profesional_aps?.tipo_profesional_aps?.nombre ??
-        null,
+        a.profesional_nombre ?? a.profesional_aps?.nombre_completo ?? null,
       establecimiento_nombre:
-        a.establecimiento_nombre ??
-        a.establecimiento_aps?.nombre ??
-        null,
+        a.establecimiento_nombre ?? a.establecimiento_aps?.nombre ?? null,
     }));
 
-    // Urgencias
     const urgenciasHosp = (urgenciasHospRaw || []).map((u) => ({
       ...u,
       profesional_nombre:
-        u.profesional_nombre ??
-        u.profesional_hosp?.nombre_completo ??
-        null,
+        u.profesional_nombre ?? u.profesional_hosp?.nombre_completo ?? null,
     }));
 
-    // Consultas CAE
     const consultasCae = (consultasCaeRaw || []).map((c) => ({
       ...c,
       profesional_nombre:
-        c.profesional_nombre ??
-        c.profesional_hosp?.nombre_completo ??
-        null,
+        c.profesional_nombre ?? c.profesional_hosp?.nombre_completo ?? null,
       especialidad_nombre:
-        c.especialidad_nombre ??
-        c.especialidad_hosp?.nombre ??
-        null,
+        c.especialidad_nombre ?? c.especialidad_hosp?.nombre ?? null,
     }));
 
-    // Hospitalizaciones
     const hospitalizaciones = (hospitalizacionesRaw || []).map((h) => ({
       ...h,
-      servicio_nombre:
-        h.servicio_nombre ??
-        h.servicio_clinico?.nombre ??
-        null,
+      servicio_nombre: h.servicio_nombre ?? h.servicio_clinico?.nombre ?? null,
     }));
 
-    // Exámenes de laboratorio
     const examenesLab = (examenesLabRaw || []).map((e) => ({
       ...e,
       profesional_nombre:
-        e.profesional_nombre ??
-        e.profesional_hosp?.nombre_completo ??
-        null,
+        e.profesional_nombre ?? e.profesional_hosp?.nombre_completo ?? null,
     }));
 
-    // Exámenes de imagen
     const examenesImg = (examenesImgRaw || []).map((e) => ({
       ...e,
       profesional_nombre:
-        e.profesional_nombre ??
-        e.profesional_hosp?.nombre_completo ??
-        null,
+        e.profesional_nombre ?? e.profesional_hosp?.nombre_completo ?? null,
     }));
 
     // 3) Respuesta unificada
