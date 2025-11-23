@@ -68,16 +68,44 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
             fechaTexto = `${fecha} ${hora}`;
           }
 
-          // Tomamos primero campos “aplanados”, si no, los anidados
+          // Nombre del profesional
           const profesionalNombre =
             a.profesional_nombre ||
             a.profesional_aps?.nombre_completo ||
             "Profesional APS";
 
-          const profesionalTipo =
+          // Etiqueta original de tipo (para mostrar en la UI)
+          const profesionalTipoEtiqueta =
             a.profesional_tipo ||
             a.profesional_aps?.tipo_profesional_aps?.nombre ||
             "Profesional";
+
+          // 🔍 Tipo normalizado solo para filtros (médico, enfermera, matrona, odontólogo)
+          const textoParaDetectar = `${profesionalTipoEtiqueta} ${profesionalNombre}`.toLowerCase();
+          let tipoProfesionalFiltro = "otro";
+
+          if (
+            textoParaDetectar.includes("médico") ||
+            textoParaDetectar.includes("medico") ||
+            textoParaDetectar.includes("(dr")
+          ) {
+            tipoProfesionalFiltro = "medico";
+          } else if (
+            textoParaDetectar.includes("enfermer") ||
+            textoParaDetectar.includes("(enf")
+          ) {
+            tipoProfesionalFiltro = "enfermera";
+          } else if (
+            textoParaDetectar.includes("matron") ||
+            textoParaDetectar.includes("(mt")
+          ) {
+            tipoProfesionalFiltro = "matrona";
+          } else if (
+            textoParaDetectar.includes("odonto") ||
+            textoParaDetectar.includes("(od")
+          ) {
+            tipoProfesionalFiltro = "odontologo";
+          }
 
           const establecimientoNombre =
             a.establecimiento_nombre ||
@@ -97,7 +125,8 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
               a.diagnostico_principal ||
               "Sin diagnóstico principal registrado",
             profesional: profesionalNombre,
-            tipo: profesionalTipo,
+            tipo: profesionalTipoEtiqueta, // ← lo que se muestra
+            tipoFiltro: tipoProfesionalFiltro, // ← lo que usan los filtros
             establecimiento: establecimientoNombre,
             actividad: a.actividades_resumen || "Sin actividad registrada",
             indicaciones: a.indicaciones_resumen || "Sin indicaciones registradas",
@@ -120,26 +149,25 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
 
   // Filtros en memoria
   const filteredAttentions = attentions.filter((att) => {
+    // 🔹 Profesional
     if (filters.professional !== "all") {
-      const tipoLower = (att.tipo || "").toLowerCase();
-      if (
-        filters.professional === "medico" &&
-        !tipoLower.includes("médico") &&
-        !tipoLower.includes("medico")
-      ) {
+      const tipoLower = (att.tipoFiltro || "").toLowerCase();
+
+      if (filters.professional === "medico" && tipoLower !== "medico") {
         return false;
       }
-      if (filters.professional === "enfermera" && !tipoLower.includes("enfermer")) {
+      if (filters.professional === "enfermera" && tipoLower !== "enfermera") {
         return false;
       }
-      if (filters.professional === "matrona" && !tipoLower.includes("matron")) {
+      if (filters.professional === "matrona" && tipoLower !== "matrona") {
         return false;
       }
-      if (filters.professional === "odontologo" && !tipoLower.includes("odonto")) {
+      if (filters.professional === "odontologo" && tipoLower !== "odontologo") {
         return false;
       }
     }
 
+    // 🔹 Período (por meses hacia atrás)
     if (filters.period !== "all" && att.fecha) {
       const months = Number(filters.period);
       const limit = new Date();
@@ -153,14 +181,27 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
       }
     }
 
+    // 🔹 Actividad / tipo de atención
     if (filters.activity !== "all") {
       const actividadLower = (att.actividad || "").toLowerCase();
-      if (filters.activity === "control" && !actividadLower.includes("control")) {
+      const tipoAtencionLower = (att.tipoAtencion || "").toLowerCase();
+
+      if (
+        filters.activity === "control" &&
+        !actividadLower.includes("control")
+      ) {
         return false;
       }
-      if (filters.activity === "urgencia" && !actividadLower.includes("urgenc")) {
+
+      // Urgencias: mira actividad Y tipo de atención (Urgencia APS)
+      if (
+        filters.activity === "urgencia" &&
+        !actividadLower.includes("urgenc") &&
+        !tipoAtencionLower.includes("urgenc")
+      ) {
         return false;
       }
+
       if (
         filters.activity === "consulta" &&
         !actividadLower.includes("consulta") &&
@@ -222,7 +263,6 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
               {attention.diagnostico}
             </p>
             <p className="text-muted-foreground">
-              {/* tipo afuera, nombre dentro del paréntesis */}
               {attention.tipo} ({attention.profesional}) ·{" "}
               {attention.establecimiento}
             </p>
@@ -272,6 +312,7 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
         </Badge>
       </div>
 
+      {/* Filtros */}
       <div className="mb-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Select
           value={filters.professional}
@@ -327,6 +368,7 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
         </Select>
       </div>
 
+      {/* Lista de atenciones */}
       <div className="space-y-4">
         {loading && (
           <p className="text-sm text-muted-foreground">
@@ -387,7 +429,6 @@ export default function APSAttentions({ rut, compact = false, onBack }) {
                   <div>
                     <span className="text-muted-foreground">Profesional: </span>
                     <span className="text-foreground">
-                      {/* tipo afuera, nombre dentro del paréntesis */}
                       {attention.tipo} ({attention.profesional})
                     </span>
                   </div>
