@@ -269,7 +269,7 @@ function App() {
                         onClick={() => setHomeMode("search")}
                         className="group flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
                       >
-                        <div className="flex h-16 items-center justify-center">
+                        <div className="flex h-24 items-center justify-center">
                           <div className="scale-50 md:scale-90 transition group-hover:scale-100">
                             <BuscarRegistro />
                           </div>
@@ -288,7 +288,7 @@ function App() {
                         onClick={() => setHomeMode("historial")}
                         className="group flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
                       >
-                        <div className="flex h-16 items-center justify-center">
+                        <div className="flex h-24 items-center justify-center">
                           <div className="scale-[0.6] md:scale-50 transition group-hover:scale-70">
                             <VerHistorial />
                           </div>
@@ -308,7 +308,7 @@ function App() {
                           onClick={() => setShowUserManagement(true)}
                           className="group flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
                         >
-                          <div className="flex h-16 items-center justify-center">
+                          <div className="flex h-24 items-center justify-center">
                             <div className="scale-75 md:scale-50 transition group-hover:scale-70">
                               <GestionarUsuariosIcon />
                             </div>
