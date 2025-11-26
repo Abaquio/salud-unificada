@@ -41,6 +41,11 @@ import ConfirmLogout from "./components/estas-seguro";
 
 import { Button } from "@/components/ui/button";
 
+// 🧩 Dashboard visual (resumen)
+import Dashboard from "./components/dashboard";
+// 🧩 Dashboard full-screen
+import DashboardFull from "./components/dashboard-full";
+
 const API_URL = import.meta.env.VITE_API_URL;
 const STORAGE_KEY = "salud_unificada_user";
 
@@ -65,6 +70,9 @@ function App() {
 
   // Mostrar modal de confirmación de logout
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // Modal dashboard full
+  const [showDashboardFull, setShowDashboardFull] = useState(false);
 
   useEffect(() => {
     try {
@@ -239,77 +247,90 @@ function App() {
           {!searchedRut && !errorMessage && (
             <>
               {homeMode === "options" && (
-                <div className="mt-24 flex flex-col items-center justify-center text-center text-muted-foreground">
-                  <p className="text-lg font-semibold text-foreground">
-                    ¿Qué deseas hacer?
-                  </p>
-                  <p className="mt-1 max-w-md text-sm text-muted-foreground">
-                    Selecciona una opción para comenzar.
-                  </p>
+                <div className="mt-8 space-y-6">
+                  {/* Título + botones arriba */}
+                  <div className="flex flex-col gap-4 items-center">
+                    <div className="flex flex-col items-center text-center">
+                      <p className="text-lg font-semibold text-foreground">
+                        ¿Qué deseas hacer?
+                      </p>
+                      <p className="mt-1 max-w-md text-sm text-muted-foreground">
+                        Selecciona una opción para comenzar.
+                      </p>
+                    </div>
 
-                  <div
-                    className={`mt-10 grid w-full max-w-5xl grid-cols-1 gap-8 ${
-                      isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setHomeMode("search")}
-                      className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                    <div
+                      className={`grid w-full max-w-5xl grid-cols-1 gap-4 ${
+                        isAdmin ? "md:grid-cols-3" : "md:grid-cols-2"
+                      }`}
                     >
-                      <div className="flex h-32 items-center justify-center">
-                        <div className="scale-90 md:scale-100 transition group-hover:scale-105">
-                          <BuscarRegistro />
-                        </div>
-                      </div>
-
-                      <p className="mt-4 text-base font-semibold text-slate-800">
-                        Buscar registro
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Ingresar RUT y ver resumen clínico unificado.
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setHomeMode("historial")}
-                      className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
-                    >
-                      <div className="flex h-32 items-center justify-center">
-                        <div className="scale-75 md:scale-90 transition group-hover:scale-100">
-                          <VerHistorial />
-                        </div>
-                      </div>
-
-                      <p className="mt-4 text-base font-semibold text-slate-800">
-                        Ver historial
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        Revisa las búsquedas recientes realizadas.
-                      </p>
-                    </button>
-
-                    {isAdmin && (
                       <button
                         type="button"
-                        onClick={() => setShowUserManagement(true)}
-                        className="group flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white/70 px-6 py-6 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                        onClick={() => setHomeMode("search")}
+                        className="group flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
                       >
-                        <div className="flex h-32 items-center justify-center">
-                          <div className="transition group-hover:scale-105">
-                            <GestionarUsuariosIcon />
+                        <div className="flex h-16 items-center justify-center">
+                          <div className="scale-50 md:scale-90 transition group-hover:scale-100">
+                            <BuscarRegistro />
                           </div>
                         </div>
 
-                        <p className="mt-4 text-base font-semibold text-slate-800">
-                          Gestionar usuarios
+                        <p className="mt-3 text-sm font-semibold text-slate-800">
+                          Buscar registro
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          Crear, editar y administrar cuentas de acceso.
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Ingresar RUT y ver resumen clínico unificado.
                         </p>
                       </button>
-                    )}
+
+                      <button
+                        type="button"
+                        onClick={() => setHomeMode("historial")}
+                        className="group flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                      >
+                        <div className="flex h-16 items-center justify-center">
+                          <div className="scale-[0.6] md:scale-50 transition group-hover:scale-70">
+                            <VerHistorial />
+                          </div>
+                        </div>
+
+                        <p className="mt-3 text-sm font-semibold text-slate-800">
+                          Ver historial
+                        </p>
+                        <p className="mt-1 text-[11px] text-slate-500">
+                          Revisa las búsquedas recientes realizadas.
+                        </p>
+                      </button>
+
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => setShowUserManagement(true)}
+                          className="group flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
+                        >
+                          <div className="flex h-16 items-center justify-center">
+                            <div className="scale-75 md:scale-50 transition group-hover:scale-70">
+                              <GestionarUsuariosIcon />
+                            </div>
+                          </div>
+
+                          <p className="mt-3 text-sm font-semibold text-slate-800">
+                            Gestionar usuarios
+                          </p>
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Crear, editar y administrar cuentas de acceso.
+                          </p>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dashboard debajo ocupando el resto del espacio */}
+                  <div className="mt-2">
+                    <Dashboard 
+                      onOpenFull={() => setShowDashboardFull(true)} 
+                      onOpenHistory={() => setHomeMode("historial")}
+                      />
                   </div>
                 </div>
               )}
@@ -333,8 +354,8 @@ function App() {
                       </p>
                       <p className="mt-1 max-w-md text-sm text-muted-foreground">
                         Ingresa el RUT en la barra superior y presiona{" "}
-                        <span className="font-semibold">“Buscar”</span> para ver el
-                        resumen clínico unificado del paciente.
+                        <span className="font-semibold">“Buscar”</span> para ver
+                        el resumen clínico unificado del paciente.
                       </p>
                     </>
                   )}
@@ -426,6 +447,11 @@ function App() {
 
       {showProfile && profileUser && (
         <UserProfile user={profileUser} onClose={() => setShowProfile(false)} />
+      )}
+
+      {/* Modal Dashboard full-screen */}
+      {showDashboardFull && (
+        <DashboardFull onClose={() => setShowDashboardFull(false)} />
       )}
 
       {/* Modal "¿Estás seguro de cerrar sesión?" */}
