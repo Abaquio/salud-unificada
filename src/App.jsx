@@ -270,7 +270,7 @@ function App() {
                         className="group flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white/70 px-3 py-3 shadow-sm transition hover:-translate-y-1 hover:border-primary/60 hover:shadow-lg"
                       >
                         <div className="flex h-24 items-center justify-center">
-                          <div className="scale-50 md:scale-90 transition group-hover:scale-100">
+                          <div className="scale-75 md:scale-90 transition group-hover:scale-100">
                             <BuscarRegistro />
                           </div>
                         </div>
@@ -325,13 +325,15 @@ function App() {
                     </div>
                   </div>
 
-                  {/* Dashboard debajo ocupando el resto del espacio */}
-                  <div className="mt-2">
-                    <Dashboard 
-                      onOpenFull={() => setShowDashboardFull(true)} 
-                      onOpenHistory={() => setHomeMode("historial")}
+                  {/* Dashboard debajo ocupando el resto del espacio - SOLO ADMIN */}
+                  {isAdmin && (
+                    <div className="pt-5">
+                      <Dashboard
+                        onOpenFull={() => setShowDashboardFull(true)}
+                        onOpenHistory={() => setHomeMode("historial")}
                       />
-                  </div>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -449,8 +451,8 @@ function App() {
         <UserProfile user={profileUser} onClose={() => setShowProfile(false)} />
       )}
 
-      {/* Modal Dashboard full-screen */}
-      {showDashboardFull && (
+      {/* Modal Dashboard full-screen - SOLO ADMIN */}
+      {isAdmin && showDashboardFull && (
         <DashboardFull onClose={() => setShowDashboardFull(false)} />
       )}
 
