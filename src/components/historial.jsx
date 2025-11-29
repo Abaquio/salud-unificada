@@ -8,12 +8,22 @@ import { Button } from "@/components/ui/button"
 
 const API_URL = import.meta.env.VITE_API_URL
 
-export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoToRut }) {
+export default function PatientHistory({
+  onClose,
+  currentUserId,
+  isAdmin,
+  onGoToRut,
+}) {
   const [searchTerm, setSearchTerm] = useState("")
   const [history, setHistory] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
+
+  // Filtros avanzados
+  const [filterDate, setFilterDate] = useState("") // YYYY-MM-DD
+  const [filterUser, setFilterUser] = useState("")
+  const [filterResult, setFilterResult] = useState("") // "", "found", "not_found"
 
   const PAGE_SIZE = 6
 
@@ -32,10 +42,9 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
     setCurrentPage(1)
   }
 
-  // 🛰️ Cargar historial
+  // 🛰️ Cargar historial desde la API
   useEffect(() => {
     const fetchHistory = async () => {
-      // si NO es admin y no tenemos currentUserId, no hacemos nada
       if (!isAdmin && !currentUserId) return
 
       try {
@@ -43,8 +52,6 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
         setError("")
 
         const params = new URLSearchParams()
-
-        // si no es admin, filtramos por usuarioId
         if (!isAdmin && currentUserId) {
           params.set("usuarioId", currentUserId)
         }
@@ -73,23 +80,6 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
     fetchHistory()
   }, [currentUserId, isAdmin])
 
-  // 🧾 Filtrado en el frontend por RUT
-  const filteredHistory = history.filter((item) => {
-    if (!searchTerm) return true
-
-    const itemRutNorm = normalizeRut(`${item.rut_buscado || ""}${item.dv_buscado || ""}`)
-    const searchNorm = normalizeRut(searchTerm)
-
-    return itemRutNorm.includes(searchNorm)
-  })
-
-  // 📄 Paginación
-  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / PAGE_SIZE))
-  const safeCurrentPage = Math.min(currentPage, totalPages)
-  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE
-  const endIndex = startIndex + PAGE_SIZE
-  const paginatedHistory = filteredHistory.slice(startIndex, endIndex)
-
   const formatRutDisplay = (rut, dv) => {
     if (!rut) return "-"
     const clean = rut.replace(/\./g, "")
@@ -114,6 +104,73 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
     }
   }
 
+  // 🧹 Limpiar filtros
+  const clearFilters = () => {
+    setSearchTerm("")
+    setFilterDate("")
+    setFilterUser("")
+    setFilterResult("")
+    setCurrentPage(1)
+  }
+
+  // 🧾 Filtrado en el frontend (RUT + filtros avanzados)
+  const filteredHistory = history.filter((item) => {
+    // 1) Filtro por RUT
+    if (searchTerm) {
+      const itemRutNorm = normalizeRut(
+        `${item.rut_buscado || ""}${item.dv_buscado || ""}`
+      )
+      const searchNorm = normalizeRut(searchTerm)
+      if (!itemRutNorm.includes(searchNorm)) return false
+    }
+
+    // 2) Filtro por fecha (solo día)
+    if (filterDate) {
+      if (!item.fecha_hora_busqueda) return false
+      const d = new Date(item.fecha_hora_busqueda)
+      if (Number.isNaN(d.getTime())) return false
+      const itemDateStr = d.toISOString().slice(0, 10)
+      if (itemDateStr !== filterDate) return false
+    }
+
+    // 3) Filtro por usuario
+    if (filterUser) {
+      const nombreUsuario = (item.usuario?.nombre_completo || "").toLowerCase()
+      if (!nombreUsuario.includes(filterUser.toLowerCase())) return false
+    }
+
+    // 4) Filtro por resultado
+    if (filterResult === "found" && !item.resultado_encontrado) return false
+    if (filterResult === "not_found" && item.resultado_encontrado) return false
+
+    return true
+  })
+
+  // 📄 Paginación
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / PAGE_SIZE))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const startIndex = (safeCurrentPage - 1) * PAGE_SIZE
+  const endIndex = startIndex + PAGE_SIZE
+  const paginatedHistory = filteredHistory.slice(startIndex, endIndex)
+
+  // Ventana de páginas visibles (máx 4)
+  const maxVisiblePages = 4
+  let startPage = Math.max(
+    1,
+    safeCurrentPage - Math.floor(maxVisiblePages / 2)
+  )
+  let endPage = startPage + maxVisiblePages - 1
+
+  if (endPage > totalPages) {
+    endPage = totalPages
+    startPage = Math.max(1, endPage - maxVisiblePages + 1)
+  }
+
+  const visiblePages = []
+  for (let p = startPage; p <= endPage; p += 1) {
+    visiblePages.push(p)
+  }
+
   return (
     <div className="fixed inset-0 bg-background z-[100] overflow-auto">
       {/* Header */}
@@ -128,7 +185,9 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
               <span className="text-lg leading-none">←</span>
               <span>Volver</span>
             </button>
-            <h2 className="text-xl font-semibold text-foreground">Historial de Búsquedas</h2>
+            <h2 className="text-xl font-semibold text-foreground">
+              Historial de Búsquedas
+            </h2>
             <Badge variant="secondary" className="ml-2">
               {filteredHistory.length} registros
             </Badge>
@@ -143,17 +202,92 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
           <CardHeader>
             <CardTitle className="text-lg">Buscar por RUT</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <Input
-              type="text"
-              placeholder="11222333-4"
-              value={searchTerm}
-              onChange={handleSearchChange}
-              className="w-full font-mono"
-            />
-            <p className="text-xs text-muted-foreground">
-              Ingresa el RUT sin puntos y con guion antes del dígito verificador.
-            </p>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Input
+                type="text"
+                placeholder="11222333-4"
+                value={searchTerm}
+                onChange={handleSearchChange}
+                className="w-full font-mono"
+              />
+              <p className="text-xs text-muted-foreground">
+                Ingresa el RUT sin puntos y con guion antes del dígito
+                verificador.
+              </p>
+            </div>
+
+            {/* Búsqueda avanzada */}
+            <div className="pt-3 border-t border-gray-200">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">
+                Búsqueda avanzada
+              </p>
+              <div className="grid gap-3 md:grid-cols-3">
+                {/* Fecha */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Fecha de búsqueda
+                  </label>
+                  <Input
+                    type="date"
+                    value={filterDate}
+                    onChange={(e) => {
+                      setFilterDate(e.target.value)
+                      setCurrentPage(1)
+                    }}
+                    className="w-full text-sm"
+                  />
+                </div>
+
+                {/* Usuario */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Usuario que realizó la búsqueda
+                  </label>
+                  <Input
+                    type="text"
+                    placeholder="Nombre de usuario"
+                    value={filterUser}
+                    onChange={(e) => {
+                      setFilterUser(e.target.value)
+                      setCurrentPage(1)
+                    }}
+                    className="w-full text-sm"
+                  />
+                </div>
+
+                {/* Resultado */}
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-muted-foreground">
+                    Resultado
+                  </label>
+                  <select
+                    value={filterResult}
+                    onChange={(e) => {
+                      setFilterResult(e.target.value)
+                      setCurrentPage(1)
+                    }}
+                    className="w-full h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <option value="">Todos</option>
+                    <option value="found">Encontrado</option>
+                    <option value="not_found">No encontrado</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Botón limpiar */}
+              <div className="pt-3">
+                <Button
+                  variant="outline"
+                  className="text-sm"
+                  type="button"
+                  onClick={clearFilters}
+                >
+                  Limpiar filtros
+                </Button>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
@@ -223,17 +357,21 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
                         </td>
                         <td className="px-6 py-4">
                           <Badge
-                            variant={item.resultado_encontrado ? "outline" : "destructive"}
+                            variant={
+                              item.resultado_encontrado ? "outline" : "destructive"
+                            }
                             className="text-xs"
                           >
-                            {item.resultado_encontrado ? "Encontrado" : "No encontrado"}
+                            {item.resultado_encontrado
+                              ? "Encontrado"
+                              : "No encontrado"}
                           </Badge>
                         </td>
                         <td className="px-6 py-4 text-right">
                           <Button
                             type="button"
-                            variant="outline"
                             size="sm"
+                            className="bg-blue-500 hover:bg-blue-600 text-white border-none"
                             onClick={() => handleGoClick(item)}
                           >
                             Ir
@@ -243,7 +381,10 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-muted-foreground">
+                      <td
+                        colSpan={6}
+                        className="px-6 py-12 text-center text-muted-foreground"
+                      >
                         No se encontraron resultados
                         {searchTerm ? ` para "${searchTerm}"` : ""}.
                       </td>
@@ -253,23 +394,46 @@ export default function PatientHistory({ onClose, currentUserId, isAdmin, onGoTo
               </table>
             </div>
 
-            {/* Paginación */}
+            {/* Paginación con ventana y flechas */}
             {totalPages > 1 && (
               <div className="flex justify-center items-center gap-2 px-6 py-4">
-                {Array.from({ length: totalPages }).map((_, index) => {
-                  const page = index + 1
-                  return (
-                    <Button
-                      key={page}
-                      type="button"
-                      size="sm"
-                      variant={page === safeCurrentPage ? "default" : "outline"}
-                      onClick={() => setCurrentPage(page)}
-                    >
-                      {page}
-                    </Button>
-                  )
-                })}
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={safeCurrentPage === 1}
+                  onClick={() =>
+                    setCurrentPage((prev) => Math.max(1, prev - 1))
+                  }
+                >
+                  ‹
+                </Button>
+
+                {visiblePages.map((page) => (
+                  <Button
+                    key={page}
+                    type="button"
+                    size="sm"
+                    variant={page === safeCurrentPage ? "default" : "outline"}
+                    onClick={() => setCurrentPage(page)}
+                  >
+                    {page}
+                  </Button>
+                ))}
+
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={safeCurrentPage === totalPages}
+                  onClick={() =>
+                    setCurrentPage((prev) =>
+                      Math.min(totalPages, prev + 1)
+                    )
+                  }
+                >
+                  ›
+                </Button>
               </div>
             )}
           </CardContent>
