@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,18 +14,54 @@ import {
   Download,
 } from "lucide-react"
 
-// MUI
 import Box from "@mui/material/Box"
 import { LineChart } from "@mui/x-charts/LineChart"
 import { BarChart } from "@mui/x-charts/BarChart"
 import { PieChart } from "@mui/x-charts/PieChart"
 
-// Excel
 import * as XLSX from "xlsx"
 
 const API_URL = import.meta.env.VITE_API_URL
 
+const monthNamesLong = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+]
+
+const monthNamesShort = [
+  "ENE",
+  "FEB",
+  "MAR",
+  "ABR",
+  "MAY",
+  "JUN",
+  "JUL",
+  "AGO",
+  "SEP",
+  "OCT",
+  "NOV",
+  "DIC",
+]
+
 export default function DashboardFull({ onClose }) {
+  const now = useMemo(() => new Date(), [])
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1 // 1-12
+
+  const [viewMode, setViewMode] = useState("month") // "month" | "year"
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth)
+
   const [stats, setStats] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
@@ -36,7 +72,14 @@ export default function DashboardFull({ onClose }) {
         setLoading(true)
         setError("")
 
-        const res = await fetch(`${API_URL}/api/dashboard/full`)
+        const params = new URLSearchParams()
+        params.set("view", viewMode)
+        params.set("year", String(selectedYear))
+        if (viewMode === "month") {
+          params.set("month", String(selectedMonth))
+        }
+
+        const res = await fetch(`${API_URL}/api/dashboard/full?${params.toString()}`)
         const data = await res.json()
 
         if (!res.ok) {
@@ -56,7 +99,9 @@ export default function DashboardFull({ onClose }) {
     }
 
     load()
-  }, [])
+  }, [viewMode, selectedYear, selectedMonth])
+
+  const periodType = stats?.periodType || viewMode
 
   const searchesThisMonth = stats?.searchesThisMonth ?? 0
   const searchesLastMonth = stats?.searchesLastMonth ?? 0
@@ -76,18 +121,17 @@ export default function DashboardFull({ onClose }) {
       ((searchesThisMonth - searchesLastMonth) / searchesLastMonth) * 100
   }
 
-  const now = new Date()
-  const monthFormatterLong = new Intl.DateTimeFormat("es-CL", {
-    month: "long",
-  })
-  const monthFormatterShort = new Intl.DateTimeFormat("es-CL", {
-    month: "short",
-  })
+  const selectedMonthNameLong =
+    monthNamesLong[(selectedMonth || 1) - 1] || monthNamesLong[0]
+  const selectedMonthNameShort =
+    monthNamesShort[(selectedMonth || 1) - 1] || monthNamesShort[0]
 
-  const currentMonthName = monthFormatterLong.format(now).toUpperCase()
-  const currentMonthShort = monthFormatterShort.format(now).toUpperCase()
+  // === Labels de gráfico diario según periodo ===
+  const dailyLabels =
+    periodType === "year"
+      ? searchesByDay.map((d) => monthNamesShort[(d.day || 1) - 1] || "")
+      : searchesByDay.map((d) => `${d.day} ${selectedMonthNameShort}`)
 
-  const dailyLabels = searchesByDay.map((d) => `${d.day} ${currentMonthShort}`)
   const dailyValues = searchesByDay.map((d) => d.searches)
 
   const weeklyLabels = searchesByWeek.map((w) => w.week)
@@ -111,7 +155,6 @@ export default function DashboardFull({ onClose }) {
 
   const roleLabels = searchesByRole.map((r) => r.role)
   const roleValues = searchesByRole.map((r) => r.count)
-
   const totalRoleSearches = roleValues.reduce((acc, v) => acc + v, 0)
   const rolePercentages =
     totalRoleSearches > 0
@@ -119,24 +162,28 @@ export default function DashboardFull({ onClose }) {
       : roleValues.map(() => 0)
 
   const zoneValueFormatter = (item) => `${item.value} búsquedas`
-
-  // Colores para el gráfico de Top Logins (uno por usuario)
   const loginBarColors = ["#f97316", "#22c55e", "#3b82f6", "#a855f7", "#ec4899"]
 
-  // ===================== EXPORTAR A EXCEL (XLSX) =====================
+  // ==== Exportar Excel ====
   const handleExport = () => {
-    if (!stats) {
-      alert("Los datos aún se están cargando. Intenta nuevamente en unos segundos.")
-      return
-    }
+    if (!stats) return
 
-    // ---- Hoja RESUMEN ----
+    const periodoActualLabel =
+      viewMode === "month"
+        ? `mes ${selectedMonthNameLong} ${selectedYear}`
+        : `año ${selectedYear}`
+
+    const periodoAnteriorLabel =
+      viewMode === "month" ? "mes anterior" : "año anterior"
+
     const resumenSheetData = [
       ["Resumen general del dashboard"],
       [],
+      ["Período actual", periodoActualLabel],
+      [],
       ["Métrica", "Valor"],
-      ["Búsquedas este mes", searchesThisMonth],
-      ["Búsquedas mes anterior", searchesLastMonth],
+      ["Búsquedas período actual", searchesThisMonth],
+      [`Búsquedas ${periodoAnteriorLabel}`, searchesLastMonth],
       [
         "Variación %",
         Number.isFinite(percentageChange)
@@ -173,37 +220,46 @@ export default function DashboardFull({ onClose }) {
 
     const resumenSheet = XLSX.utils.aoa_to_sheet(resumenSheetData)
 
-    // ---- Hoja BÚSQUEDAS DIARIAS ----
+    const dailyTitle =
+      periodType === "month"
+        ? "Búsquedas diarias del mes"
+        : "Búsquedas agregadas por mes"
+
     const dailySheetData = [
-      ["Búsquedas diarias del mes"],
-      [`Mes: ${currentMonthName}`],
+      [dailyTitle],
+      [periodoActualLabel],
       [],
-      ["Día", "Búsquedas"],
-      ...searchesByDay.map((d) => [`${d.day} ${currentMonthShort}`, d.searches]),
+      [periodType === "month" ? "Día" : "Mes", "Búsquedas"],
+      ...searchesByDay.map((d) => [
+        periodType === "month"
+          ? `${d.day} ${selectedMonthNameShort}`
+          : monthNamesShort[(d.day || 1) - 1] || "",
+        d.searches,
+      ]),
     ]
     const dailySheet = XLSX.utils.aoa_to_sheet(dailySheetData)
 
-    // ---- Hoja SEMANAS ----
     const weeklySheetData = [
-      ["Tendencia semanal de búsquedas"],
+      ["Tendencia semanal de búsquedas (solo vista mensual)"],
+      [periodoActualLabel],
       [],
       ["Semana", "Búsquedas"],
       ...searchesByWeek.map((w) => [w.week, w.searches]),
     ]
     const weeklySheet = XLSX.utils.aoa_to_sheet(weeklySheetData)
 
-    // ---- Hoja TOP LOGINS ----
     const loginsSheetData = [
-      ["Top 5 usuarios con más logins exitosos (este mes)"],
+      ["Top 5 usuarios con más logins exitosos"],
+      [periodoActualLabel],
       [],
       ["Usuario", "Logins"],
       ...topLoginUsers.map((u) => [u.name, u.logins]),
     ]
     const loginsSheet = XLSX.utils.aoa_to_sheet(loginsSheetData)
 
-    // ---- Hoja ROLES ----
     const rolesSheetData = [
       ["Búsquedas por rol"],
+      [periodoActualLabel],
       [],
       ["Rol", "Búsquedas", "% del total"],
       ...roleLabels.map((label, idx) => [
@@ -216,19 +272,18 @@ export default function DashboardFull({ onClose }) {
     ]
     const rolesSheet = XLSX.utils.aoa_to_sheet(rolesSheetData)
 
-    // ---- Hoja ZONAS ----
     const zonasSheetData = [
       ["Distribución geográfica de RUT buscados"],
+      [periodoActualLabel],
       [],
       ["Zona", "Búsquedas"],
       ...searchesByZone.map((z) => [z.zone || "Sin zona", z.count]),
     ]
     const zonasSheet = XLSX.utils.aoa_to_sheet(zonasSheetData)
 
-    // Crear libro y añadir hojas
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, resumenSheet, "Resumen")
-    XLSX.utils.book_append_sheet(wb, dailySheet, "Busquedas_diarias")
+    XLSX.utils.book_append_sheet(wb, dailySheet, "Periodo")
     XLSX.utils.book_append_sheet(wb, weeklySheet, "Semanas")
     XLSX.utils.book_append_sheet(wb, loginsSheet, "Top_logins")
     XLSX.utils.book_append_sheet(wb, rolesSheet, "Roles")
@@ -239,16 +294,25 @@ export default function DashboardFull({ onClose }) {
       type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     })
     const url = URL.createObjectURL(blob)
-
     const link = document.createElement("a")
     link.href = url
-    link.download = `dashboard_salud_unificada_${now
-      .toISOString()
-      .slice(0, 10)}.xlsx`
+    link.download = `dashboard_salud_unificada_${selectedYear}${
+      viewMode === "month" ? `_${String(selectedMonth).padStart(2, "0")}` : ""
+    }.xlsx`
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
+  }
+
+  const periodoActualTexto =
+    viewMode === "month" ? "Búsquedas en el mes seleccionado" : "Búsquedas en el año seleccionado"
+  const comparadorTexto =
+    viewMode === "month" ? "vs mes anterior" : "vs año anterior"
+
+  const yearOptions = []
+  for (let y = currentYear; y >= currentYear - 4; y -= 1) {
+    yearOptions.push(y)
   }
 
   return (
@@ -264,7 +328,56 @@ export default function DashboardFull({ onClose }) {
               Estadísticas detalladas de uso del sistema Salud Unificada
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            {/* Toggle Mes / Año */}
+            <div className="flex items-center rounded-full bg-muted p-1">
+              <Button
+                size="sm"
+                variant={viewMode === "month" ? "default" : "outline"}
+                className="rounded-full px-4"
+                onClick={() => setViewMode("month")}
+              >
+                Mes
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === "year" ? "default" : "outline"}
+                className="rounded-full px-4"
+                onClick={() => setViewMode("year")}
+              >
+                Año
+              </Button>
+            </div>
+
+            {/* Select Año / Mes */}
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
+              >
+                {yearOptions.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </select>
+
+              {viewMode === "month" && (
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                >
+                  {monthNamesLong.map((name, idx) => (
+                    <option key={idx + 1} value={idx + 1}>
+                      {name[0].toUpperCase() + name.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
             <Button
               size="sm"
               className="bg-green-500 hover:bg-green-600 text-white border-none"
@@ -285,13 +398,13 @@ export default function DashboardFull({ onClose }) {
 
           {/* Stats principales */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Búsquedas del Mes */}
+            {/* Búsquedas período */}
             <Card>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">
-                      Búsquedas este mes
+                      {periodoActualTexto}
                     </p>
                     <p className="text-3xl font-bold text-foreground mt-2">
                       {loading ? "—" : searchesThisMonth}
@@ -308,7 +421,7 @@ export default function DashboardFull({ onClose }) {
                         %
                       </Badge>
                       <span className="text-xs text-muted-foreground">
-                        vs mes anterior
+                        {comparadorTexto}
                       </span>
                     </div>
                   </div>
@@ -381,15 +494,29 @@ export default function DashboardFull({ onClose }) {
             </Card>
           </div>
 
-          {/* Búsquedas diarias del mes */}
+          {/* Búsquedas del período */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Activity className="h-5 w-5 text-primary" />
-                Búsquedas Diarias del Mes
+                {periodType === "month"
+                  ? "Búsquedas Diarias del Mes"
+                  : "Búsquedas por Mes del Año"}
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                Mes actual: <span className="font-semibold">{currentMonthName}</span>
+                {periodType === "month" ? (
+                  <>
+                    Mes seleccionado:{" "}
+                    <span className="font-semibold">
+                      {selectedMonthNameLong.toUpperCase()} {selectedYear}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Año seleccionado:{" "}
+                    <span className="font-semibold">{selectedYear}</span>
+                  </>
+                )}
               </p>
             </CardHeader>
             <CardContent>
@@ -397,7 +524,7 @@ export default function DashboardFull({ onClose }) {
                 <p className="text-sm text-muted-foreground">
                   {loading
                     ? "Cargando..."
-                    : "No hay búsquedas registradas en este mes."}
+                    : "No hay búsquedas registradas en este período."}
                 </p>
               ) : (
                 <div className="w-full overflow-x-auto">
@@ -427,20 +554,22 @@ export default function DashboardFull({ onClose }) {
 
           {/* Tendencia semanal + Distribución geográfica */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Tendencia semanal */}
+            {/* Tendencia semanal (solo tiene datos en vista mensual) */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <TrendingUp className="h-5 w-5 text-green-600" />
-                  Tendencia semanal de búsquedas
+                  Tendencia de búsquedas por semana
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {weeklyValues.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    {loading
+                    {periodType === "year"
+                      ? "La vista anual no muestra desglose semanal."
+                      : loading
                       ? "Cargando..."
-                      : "No hay búsquedas registradas en este mes."}
+                      : "No hay búsquedas registradas en este período."}
                   </p>
                 ) : (
                   <div className="w-full overflow-x-auto">
@@ -479,7 +608,7 @@ export default function DashboardFull({ onClose }) {
                   <p className="text-sm text-muted-foreground">
                     {loading
                       ? "Cargando..."
-                      : "No hay información de zona para los RUT buscados este mes."}
+                      : "No hay información de zona para los RUT buscados en este período."}
                   </p>
                 ) : (
                   <div className="flex justify-center">
@@ -511,12 +640,11 @@ export default function DashboardFull({ onClose }) {
 
           {/* Top 5 logins + Búsquedas por rol */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Top 5 logins – ahora VERTICAL y con un color por barra */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <LogIn className="h-5 w-5 text-orange-600" />
-                  Top 5 usuarios con más logins exitosos (este mes)
+                  Top 5 usuarios con más logins exitosos
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -524,12 +652,11 @@ export default function DashboardFull({ onClose }) {
                   <p className="text-sm text-muted-foreground">
                     {loading
                       ? "Cargando..."
-                      : "No hay logins exitosos registrados en este mes."}
+                      : "No hay logins exitosos registrados en este período."}
                   </p>
                 ) : (
                   <div className="w-full overflow-x-auto">
                     <BarChart
-                      // layout por defecto: vertical
                       xAxis={[
                         {
                           scaleType: "band",
@@ -559,7 +686,6 @@ export default function DashboardFull({ onClose }) {
               </CardContent>
             </Card>
 
-            {/* Búsquedas por rol */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-lg">Búsquedas por rol</CardTitle>
@@ -569,7 +695,7 @@ export default function DashboardFull({ onClose }) {
                   <p className="text-sm text-muted-foreground">
                     {loading
                       ? "Cargando..."
-                      : "No hay búsquedas registradas en este mes."}
+                      : "No hay búsquedas registradas en este período."}
                   </p>
                 ) : (
                   <div className="w-full overflow-x-auto">

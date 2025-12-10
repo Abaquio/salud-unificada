@@ -17,9 +17,14 @@ import {
 export async function getSearchHistory(req, res) {
   try {
     const { q, limit, usuarioId } = req.query;
-    const limitNumber = Number.parseInt(limit || "100", 10);
 
-    let query = auditClient
+    // límite total opcional (por si algún día lo quieres usar),
+    // 0 = sin límite (trae todo lo que haya)
+    const limitTotal = Number.parseInt(limit || "0", 10);
+    const CHUNK_SIZE = 1000; // máximo por request en Supabase
+
+    // 1) Query base (sin rango todavía)
+    let baseQuery = auditClient
       .from("busqueda_paciente_auditoria")
       .select(
         `
@@ -36,34 +41,68 @@ export async function getSearchHistory(req, res) {
           rut,
           dv
         )
-      `
+      `,
       )
-      .order("fecha_hora_busqueda", { ascending: false })
-      .limit(Number.isNaN(limitNumber) ? 100 : limitNumber);
+      .order("fecha_hora_busqueda", { ascending: false });
 
     // 🔐 Si viene usuarioId → filtra (no admin)
     if (usuarioId) {
-      query = query.eq("usuario_id", usuarioId);
+      baseQuery = baseQuery.eq("usuario_id", usuarioId);
     }
 
     // Filtro opcional por RUT
     if (q) {
       const cleaned = q.replace(/\D/g, "");
       if (cleaned) {
-        query = query.ilike("rut_buscado", `%${cleaned}%`);
+        baseQuery = baseQuery.ilike("rut_buscado", `%${cleaned}%`);
       }
     }
 
-    const { data, error } = await query;
+    // 2) Traer TODAS las filas en chunks de 1000
+    const allRows = [];
+    let from = 0;
 
-    if (error) {
-      console.error("❌ Error obteniendo historial de búsquedas:", error);
-      return res
-        .status(500)
-        .json({ message: "Error al obtener historial de búsquedas" });
+    while (true) {
+      // hasta dónde traemos en este chunk
+      let to = from + CHUNK_SIZE - 1;
+
+      // si hay limitTotal, no pasarnos de ese tope
+      if (limitTotal && to >= limitTotal) {
+        to = limitTotal - 1;
+      }
+
+      const { data, error } = await baseQuery.range(from, to);
+
+      if (error) {
+        console.error("❌ Error obteniendo historial de búsquedas:", error);
+        return res
+          .status(500)
+          .json({ message: "Error al obtener historial de búsquedas" });
+      }
+
+      if (!data || data.length === 0) {
+        // no hay más filas
+        break;
+      }
+
+      allRows.push(...data);
+
+      // si ya llegamos al límite deseado → cortamos
+      if (limitTotal && allRows.length >= limitTotal) {
+        break;
+      }
+
+      // si en este chunk vinieron menos de CHUNK_SIZE,
+      // significa que ya no hay más filas
+      if (data.length < CHUNK_SIZE) {
+        break;
+      }
+
+      // siguiente bloque
+      from += CHUNK_SIZE;
     }
 
-    const baseHistory = Array.isArray(data) ? data : [];
+    const baseHistory = Array.isArray(allRows) ? allRows : [];
 
     // 🧠 Helper para obtener el nombre del paciente desde Rayen/Core
     async function resolvePatientName(rutBuscado, dvBuscado) {
@@ -112,7 +151,7 @@ export async function getSearchHistory(req, res) {
         if (item.resultado_encontrado) {
           nombrePaciente = await resolvePatientName(
             item.rut_buscado,
-            item.dv_buscado
+            item.dv_buscado,
           );
         }
 
@@ -120,7 +159,7 @@ export async function getSearchHistory(req, res) {
           ...item,
           nombre_paciente: nombrePaciente,
         };
-      })
+      }),
     );
 
     return res.json(enrichedHistory);
