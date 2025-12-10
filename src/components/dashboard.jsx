@@ -47,10 +47,10 @@ export default function Dashboard({ onOpenFull, onOpenHistory }) {
         setLoading(true)
         setError("")
 
-        // Resumen + historial usando los mismos endpoints que el historial completo
+        // Resumen + SOLO las últimas N búsquedas (limit=3)
         const [summaryRes, historyRes] = await Promise.all([
           fetch(`${API_URL}/api/dashboard/summary`),
-          fetch(`${API_URL}/api/auditoria/busquedas`),
+          fetch(`${API_URL}/api/auditoria/busquedas?limit=3`),
         ])
 
         if (!summaryRes.ok) {
@@ -62,15 +62,15 @@ export default function Dashboard({ onOpenFull, onOpenHistory }) {
 
         if (cancelled) return
 
-        // Asegurar array
         historyData = Array.isArray(historyData) ? historyData : []
 
-        // Ordenar por fecha desc y dejar solo los 3 primeros
+        // Ordenamos por fecha/hora desc por si el backend no lo hace
         historyData.sort((a, b) => {
           const da = new Date(a.fecha_hora_busqueda || 0)
           const db = new Date(b.fecha_hora_busqueda || 0)
           return db - da
         })
+
         const lastThree = historyData.slice(0, 3)
 
         setStats(summaryData)
@@ -292,13 +292,13 @@ export default function Dashboard({ onOpenFull, onOpenHistory }) {
                   RUT
                 </div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase">
-                  Paciente
+                  PACIENTE
                 </div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase">
-                  Fecha/Hora
+                  FECHA/HORA
                 </div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase">
-                  Usuario
+                  USUARIO
                 </div>
               </div>
               {recentSearches.length === 0 && (

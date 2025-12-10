@@ -8,6 +8,42 @@ import { Badge } from "@/components/ui/badge";
 
 const API_URL = import.meta.env.VITE_API_URL;
 
+// Normaliza nombre: solo letras/espacios, sin dobles espacios, cada palabra en Mayúscula Inicial
+function normalizeNameInput(value) {
+  // Solo letras (incluye acentos y ñ) y espacios
+  let cleaned = value
+    .replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]/g, "") // quita números y símbolos
+    .replace(/\s+/g, " ") // colapsa espacios
+    .trim()
+    .toLowerCase();
+
+  if (!cleaned) return "";
+
+  return cleaned
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+// Formatea teléfono con prefijo +56 y solo dígitos después
+function formatPhoneInput(value) {
+  // Dejamos solo dígitos
+  let digits = value.replace(/[^\d]/g, "");
+
+  // Si empieza con 56 lo removemos, porque ya lo ponemos nosotros
+  if (digits.startsWith("56")) {
+    digits = digits.slice(2);
+  }
+
+  // Máximo 9 dígitos (ej: 9XXXXXXXX)
+  if (digits.length > 9) {
+    digits = digits.slice(0, 9);
+  }
+
+  return digits ? `+56 ${digits}` : "+56 ";
+}
+
 export default function UserManagement({ onClose, onShowUserProfile }) {
   const [email, setEmail] = useState("");
   const [invitationSent, setInvitationSent] = useState(false);
@@ -18,6 +54,15 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
   const [actionLoadingId, setActionLoadingId] = useState(null);
   const [openMenuId, setOpenMenuId] = useState(null);
 
+  // Filtros
+  const [filterRut, setFilterRut] = useState("");
+  const [filterNombre, setFilterNombre] = useState("");
+  const [filterRol, setFilterRol] = useState("");
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 4;
+
   // Modal para crear usuario
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
@@ -26,7 +71,7 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
     email: "",
     rut: "",
     rol: "Médico",
-    telefono: "",
+    telefono: "+56 ",
     direccion: "",
     esActivo: true,
     password: "", // contraseña provisoria
@@ -120,7 +165,6 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
 
   const [showPassword, setShowPassword] = useState(false);
 
-
   const handleChangeNewUser = (field, value) => {
     setNewUser((prev) => ({ ...prev, [field]: value }));
   };
@@ -160,7 +204,7 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
         email: "",
         rut: "",
         rol: "Médico",
-        telefono: "",
+        telefono: "+56 ",
         direccion: "",
         esActivo: true,
         password: "",
@@ -172,6 +216,68 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
       setCreateLoading(false);
     }
   };
+
+  // --- Filtro y paginación ---
+
+  const filteredUsers = users.filter((user) => {
+    const rutCompleto = user.rut || user.rut_completo || "";
+    const normalizedUserRut = rutCompleto.replace(/\./g, "").toUpperCase();
+    const normalizedFilterRut = filterRut.replace(/\./g, "").toUpperCase();
+
+    if (
+      normalizedFilterRut &&
+      !normalizedUserRut.includes(normalizedFilterRut)
+    ) {
+      return false;
+    }
+
+    const nombreUsuario = (
+      user.nombre_completo ||
+      user.nombre ||
+      user.name ||
+      ""
+    ).toLowerCase();
+    const normalizedFilterNombre = filterNombre.trim().toLowerCase();
+    if (
+      normalizedFilterNombre &&
+      !nombreUsuario.includes(normalizedFilterNombre)
+    ) {
+      return false;
+    }
+
+    const rolUsuario = (user.rol || user.role || "").toLowerCase();
+    const normalizedFilterRol = filterRol.trim().toLowerCase();
+    if (normalizedFilterRol && rolUsuario !== normalizedFilterRol) {
+      return false;
+    }
+
+    return true;
+  });
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredUsers.length / ITEMS_PER_PAGE)
+  );
+
+  const getPageNumbers = (total, current, maxVisible = 4) => {
+    if (total <= maxVisible) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    let start = Math.max(1, current - Math.floor(maxVisible / 2));
+    let end = start + maxVisible - 1;
+    if (end > total) {
+      end = total;
+      start = total - maxVisible + 1;
+    }
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  };
+
+  const pageNumbers = getPageNumbers(totalPages, currentPage, 4);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const currentUsers = filteredUsers.slice(
+    startIndex,
+    startIndex + ITEMS_PER_PAGE
+  );
 
   return (
     <div className="fixed inset-0 z-50 bg-background overflow-y-auto">
@@ -335,6 +441,55 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
               </CardTitle>
             </CardHeader>
             <CardContent>
+              {/* Filtros */}
+              <div className="mb-4 grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    RUT (formato 11222333-4)
+                  </label>
+                  <Input
+                    placeholder="11222333-4"
+                    value={filterRut}
+                    onChange={(e) => {
+                      setFilterRut(formatRutInput(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Nombre
+                  </label>
+                  <Input
+                    placeholder="Buscar por nombre"
+                    value={filterNombre}
+                    onChange={(e) => {
+                      setFilterNombre(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-muted-foreground mb-1">
+                    Rol
+                  </label>
+                  <select
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    value={filterRol}
+                    onChange={(e) => {
+                      setFilterRol(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <option value="">Todos</option>
+                    <option value="Administrador">Administrador</option>
+                    <option value="Médico">Médico</option>
+                    <option value="Enfermera">Enfermera</option>
+                    <option value="TENS">TENS</option>
+                  </select>
+                </div>
+              </div>
+
               {loadingUsers ? (
                 <p className="text-sm text-muted-foreground">
                   Cargando usuarios...
@@ -342,122 +497,162 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
               ) : error ? (
                 <p className="text-sm text-red-500">{error}</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
-                          RUT
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
-                          Nombre
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
-                          Rol
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
-                          Estado
-                        </th>
-                        <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
-                          Opciones
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((user) => (
-                        <tr
-                          key={user.id}
-                          className="border-b border-gray-200 hover:bg-secondary/50 transition-colors align-top"
-                        >
-                          <td className="py-3 px-4">
-                            <span className="text-sm font-mono text-foreground">
-                              {formatRut(user.rut)}
-                            </span>
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                                <span className="text-xs font-medium text-primary-foreground">
-                                  {(user.nombre_completo ||
-                                    user.nombre ||
-                                    user.name ||
-                                    "")
-                                    .split(" ")
-                                    .filter(Boolean)
-                                    .map((n) => n[0])
-                                    .join("")}
-                                </span>
-                              </div>
-                              <span className="text-sm font-medium text-foreground">
-                                {user.nombre_completo ||
-                                  user.nombre ||
-                                  user.name}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-3 px-4">
-                            <Badge variant="secondary" className="font-normal">
-                              {user.rol || user.role || "—"}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4">
-                            {user.isActive ? (
-                              <Badge className="bg-green-100 text-green-800 border-green-200">
-                                Activo
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary">Inactivo</Badge>
-                            )}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex flex-col items-start gap-2">
-                              <button
-                                type="button"
-                                className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition"
-                                onClick={() =>
-                                  setOpenMenuId((prev) =>
-                                    prev === user.id ? null : user.id
-                                  )
-                                }
-                              >
-                                <svg
-                                  className="w-4 h-4 text-gray-700"
-                                  viewBox="0 0 20 20"
-                                  fill="currentColor"
-                                >
-                                  <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm1.5 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
-                                </svg>
-                              </button>
-
-                              {openMenuId === user.id && (
-                                <div className="w-44 bg-white border border-gray-200 rounded-lg shadow-lg text-sm">
-                                  <button
-                                    className="w-full text-left px-4 py-2 hover:bg-gray-100"
-                                    onClick={() => {
-                                      setOpenMenuId(null);
-                                      onShowUserProfile?.(user);
-                                    }}
-                                  >
-                                    Mostrar perfil
-                                  </button>
-                                  <button
-                                    className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
-                                    disabled={actionLoadingId === user.id}
-                                    onClick={() => handleToggleActive(user)}
-                                  >
-                                    {user.isActive
-                                      ? "Inhabilitar cuenta"
-                                      : "Reactivar cuenta"}
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </td>
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
+                            RUT
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
+                            Nombre
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
+                            Rol
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
+                            Estado
+                          </th>
+                          <th className="text-left py-3 px-4 text-sm font-semibold text-muted-foreground">
+                            Opciones
+                          </th>
                         </tr>
+                      </thead>
+                      <tbody>
+                        {currentUsers.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={5}
+                              className="py-4 px-4 text-sm text-muted-foreground text-center"
+                            >
+                              No se encontraron usuarios con esos criterios.
+                            </td>
+                          </tr>
+                        ) : (
+                          currentUsers.map((user) => (
+                            <tr
+                              key={user.id}
+                              className="border-b border-gray-200 hover:bg-secondary/50 transition-colors align-top"
+                            >
+                              <td className="py-3 px-4">
+                                <span className="text-sm font-mono text-foreground">
+                                  {formatRut(user.rut)}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                                    <span className="text-xs font-medium text-primary-foreground">
+                                      {(user.nombre_completo ||
+                                        user.nombre ||
+                                        user.name ||
+                                        "")
+                                        .split(" ")
+                                        .filter(Boolean)
+                                        .map((n) => n[0])
+                                        .join("")}
+                                    </span>
+                                  </div>
+                                  <span className="text-sm font-medium text-foreground">
+                                    {user.nombre_completo ||
+                                      user.nombre ||
+                                      user.name}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="py-3 px-4">
+                                <Badge
+                                  variant="secondary"
+                                  className="font-normal"
+                                >
+                                  {user.rol || user.role || "—"}
+                                </Badge>
+                              </td>
+                              <td className="py-3 px-4">
+                                {user.isActive ? (
+                                  <Badge className="bg-green-100 text-green-800 border-green-200">
+                                    Activo
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="secondary">Inactivo</Badge>
+                                )}
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="flex flex-col items-start gap-2">
+                                  <button
+                                    type="button"
+                                    className="w-8 h-8 rounded-md border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition"
+                                    onClick={() =>
+                                      setOpenMenuId((prev) =>
+                                        prev === user.id ? null : user.id
+                                      )
+                                    }
+                                  >
+                                    <svg
+                                      className="w-4 h-4 text-gray-700"
+                                      viewBox="0 0 20 20"
+                                      fill="currentColor"
+                                    >
+                                      <path d="M10 3a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm0 5a1.5 1.5 0 110 3 1.5 1.5 0 010-3zm1.5 6a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+                                    </svg>
+                                  </button>
+
+                                  {openMenuId === user.id && (
+                                    <div className="w-44 bg-white border border-gray-200 rounded-lg shadow-lg text-sm">
+                                      <button
+                                        className="w-full text-left px-4 py-2 hover:bg-gray-100"
+                                        onClick={() => {
+                                          setOpenMenuId(null);
+                                          onShowUserProfile?.(user);
+                                        }}
+                                      >
+                                        Mostrar perfil
+                                      </button>
+                                      <button
+                                        className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 disabled:opacity-60"
+                                        disabled={
+                                          actionLoadingId === user.id
+                                        }
+                                        onClick={() =>
+                                          handleToggleActive(user)
+                                        }
+                                      >
+                                        {user.isActive
+                                          ? "Inhabilitar cuenta"
+                                          : "Reactivar cuenta"}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Paginación */}
+                  {totalPages > 1 && (
+                    <div className="flex justify-center items-center gap-2 mt-4">
+                      {pageNumbers.map((page) => (
+                        <button
+                          key={page}
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`px-3 py-1 rounded-lg text-sm border ${
+                            currentPage === page
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
+                          }`}
+                        >
+                          {page}
+                        </button>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -500,7 +695,10 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
                   <Input
                     value={newUser.nombre}
                     onChange={(e) =>
-                      handleChangeNewUser("nombre", e.target.value)
+                      handleChangeNewUser(
+                        "nombre",
+                        normalizeNameInput(e.target.value)
+                      )
                     }
                     required
                   />
@@ -538,7 +736,6 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
                 </div>
 
                 {/* Contraseña provisoria */}
-                {/* Contraseña provisoria */}
                 <div>
                   <label className="block text-sm font-medium mb-1">
                     Contraseña provisoria
@@ -549,14 +746,18 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
                       type={showPassword ? "text" : "password"}
                       placeholder="Mínimo 8 caracteres"
                       value={newUser.password}
-                      onChange={(e) => handleChangeNewUser("password", e.target.value)}
+                      onChange={(e) =>
+                        handleChangeNewUser("password", e.target.value)
+                      }
                       required
                     />
 
                     {/* Botón ojo */}
                     <button
                       type="button"
-                      onClick={() => setShowPassword((prev) => !prev)}
+                      onClick={() =>
+                        setShowPassword((prev) => !prev)
+                      }
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-800"
                     >
                       {showPassword ? (
@@ -602,10 +803,10 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
                   </div>
 
                   <p className="mt-1 text-xs text-muted-foreground">
-                    El usuario deberá cambiar esta contraseña en su primer inicio de sesión.
+                    El usuario deberá cambiar esta contraseña en su primer
+                    inicio de sesión.
                   </p>
                 </div>
-
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -650,9 +851,13 @@ export default function UserManagement({ onClose, onShowUserProfile }) {
                     Teléfono (opcional)
                   </label>
                   <Input
+                    placeholder="+56 9XXXXXXXX"
                     value={newUser.telefono}
                     onChange={(e) =>
-                      handleChangeNewUser("telefono", e.target.value)
+                      handleChangeNewUser(
+                        "telefono",
+                        formatPhoneInput(e.target.value)
+                      )
                     }
                   />
                 </div>
