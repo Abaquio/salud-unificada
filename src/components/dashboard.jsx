@@ -47,7 +47,7 @@ export default function Dashboard({ onOpenFull, onOpenHistory }) {
         setLoading(true)
         setError("")
 
-        // Resumen + SOLO las últimas N búsquedas (limit=3)
+        // Resumen + SOLO las últimas 3 búsquedas (limit=3)
         const [summaryRes, historyRes] = await Promise.all([
           fetch(`${API_URL}/api/dashboard/summary`),
           fetch(`${API_URL}/api/auditoria/busquedas?limit=3`),
@@ -64,7 +64,7 @@ export default function Dashboard({ onOpenFull, onOpenHistory }) {
 
         historyData = Array.isArray(historyData) ? historyData : []
 
-        // Ordenamos por fecha/hora desc por si el backend no lo hace
+        // Ordenamos por fecha/hora desc por seguridad
         historyData.sort((a, b) => {
           const da = new Date(a.fecha_hora_busqueda || 0)
           const db = new Date(b.fecha_hora_busqueda || 0)
@@ -292,13 +292,13 @@ export default function Dashboard({ onOpenFull, onOpenHistory }) {
                   RUT
                 </div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase">
-                  PACIENTE
+                  Paciente
                 </div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase">
-                  FECHA/HORA
+                  Fecha/Hora
                 </div>
                 <div className="text-xs font-semibold text-muted-foreground uppercase">
-                  USUARIO
+                  Usuario
                 </div>
               </div>
               {recentSearches.length === 0 && (
