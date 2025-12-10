@@ -1,6 +1,9 @@
+// backend/src/server.js
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
 
 import healthRoutes from "./routes/health.routes.js";
 import patientRoutes from "./routes/patient.routes.js";
@@ -10,41 +13,29 @@ import profileRoutes from "./routes/profile.routes.js";
 import auditRoutes from "./routes/audit.routes.js";
 import dashboardRoutes from "./routes/dashboard.routes.js";
 
-
+// =====================================
+// Configuración base
+// =====================================
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-/* ============================
-   CORS CONFIG PRODUCCIÓN
-   ============================ */
-const allowedOrigins = [
-  "http://localhost:5173",                 // desarrollo local
-  "https://salud-unificada.vercel.app",    // <--- TU FRONT EN PRODUCCIÓN
-];
+// Necesario para __dirname en ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Middlewares
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Permitir requests sin origin (Postman, server-to-server)
-      if (!origin) return callback(null, true);
-
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-
-      console.log("❌ Bloqueado por CORS:", origin);
-      return callback(new Error("CORS no permitido"));
-    },
+    origin: true,
     credentials: true,
   })
 );
 
 app.use(express.json());
 
-/* ============================
-   RUTAS API
-   ============================ */
-
+// =====================================
+// Rutas API
+// =====================================
 app.use("/api/health", healthRoutes);
 app.use("/api/patient", patientRoutes);
 app.use("/api/auth", authRoutes);
@@ -53,9 +44,27 @@ app.use("/api/profile", profileRoutes);
 app.use("/api/auditoria", auditRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
-/* ============================
-   SERVIDOR
-   ============================ */
+// =====================================
+// Servir FRONTEND (React Vite)
+// dist está en: SALUD-UNIFICADA/dist
+// =====================================
+
+// Ruta absoluta a la carpeta dist
+const distPath = path.join(process.cwd(), "dist");
+
+// Servir archivos estáticos de la SPA
+app.use(express.static(distPath));
+
+// Catch-all compatible con Express 5 (NO rompe API)
+app.get(/^(?!\/api).*/, (req, res) => {
+  res.sendFile(path.join(distPath, "index.html"));
+});
+
+// =====================================
+// Servidor
+// =====================================
 app.listen(PORT, () => {
-  console.log(`Backend Salud Unificada escuchando en http://localhost:${PORT}`);
+  console.log(
+    `Backend Salud Unificada escuchando en http://localhost:${PORT}`
+  );
 });
