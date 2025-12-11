@@ -15,3 +15,5 @@ artifacts:
   files:
     - '**/*'
   discard-paths: no
+
+#build
