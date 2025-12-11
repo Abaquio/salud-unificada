@@ -1,0 +1,17 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - npm install
+  build:
+    commands:
+      - npm run build     # genera dist/ para el frontend
+  post_build:
+    commands:
+      - echo "Build completado"
+
+artifacts:
+  files:
+    - '**/*'
+  discard-paths: no
